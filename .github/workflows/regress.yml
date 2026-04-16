@@ -1,0 +1,111 @@
+name: PG regression with pg_pathcheck
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 3 * * *'
+
+jobs:
+  regress:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    env:
+      PG_INSTALL: ${{ github.workspace }}/pg_install
+      PGDATA: ${{ github.workspace }}/pgdata
+
+    steps:
+      - name: Check out pg_pathcheck
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -yqq --no-install-recommends \
+            gcc make flex bison perl \
+            libreadline-dev zlib1g-dev libicu-dev pkg-config
+
+      - name: Clone PostgreSQL master
+        run: |
+          git clone --depth=1 https://git.postgresql.org/git/postgresql.git pg_src
+
+      - name: Configure PostgreSQL
+        working-directory: pg_src
+        run: |
+          ./configure \
+            --prefix=$PG_INSTALL \
+            --enable-cassert \
+            --enable-debug \
+            --enable-injection-points
+
+      - name: Build and install PostgreSQL
+        working-directory: pg_src
+        run: |
+          make -j$(nproc) -s
+          make install -s
+
+      - name: Build and install pg_pathcheck
+        id: build_ext
+        run: |
+          USE_PGXS=1 PG_CONFIG=$PG_INSTALL/bin/pg_config make install 2>&1 | tee build_ext.log
+
+      - name: Send email on extension build failure
+        if: failure() && steps.build_ext.outcome == 'failure'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "pg_pathcheck failed to compile against PG master"
+          to: ${{ secrets.NOTIFY_EMAIL }}
+          from: ${{ secrets.SMTP_FROM }}
+          body: |
+            pg_pathcheck failed to compile against current PostgreSQL master.
+
+            This usually means an upstream API change broke the extension
+            (e.g. a new Path type, changed struct layout, or renamed header).
+
+            Repository: ${{ github.repository }}
+            Branch:     ${{ github.ref_name }}
+            Commit:     ${{ github.sha }}
+            Run:        ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            Trigger:    ${{ github.event_name }}
+
+            Check the build log for details.
+
+      - name: Initialise cluster
+        run: |
+          $PG_INSTALL/bin/initdb -D $PGDATA --no-sync
+          echo "shared_preload_libraries = 'pg_pathcheck'" >> $PGDATA/postgresql.conf
+
+      - name: Start server
+        run: |
+          $PG_INSTALL/bin/pg_ctl -D $PGDATA -l $PGDATA/logfile start
+          $PG_INSTALL/bin/pg_isready -t 30
+
+      - name: Run core regression tests
+        working-directory: pg_src
+        run: |
+          make -C src/test/regress installcheck \
+            EXTRA_REGRESS_OPTS="--bindir=$PG_INSTALL/bin"
+        env:
+          PATH: ${{ env.PG_INSTALL }}/bin:${{ env.PATH }}
+
+      - name: Stop server
+        if: always()
+        run: |
+          $PG_INSTALL/bin/pg_ctl -D $PGDATA stop -m fast || true
+
+      - name: Upload regression diffs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: regression-diffs
+          path: |
+            pg_src/src/test/regress/regression.diffs
+            ${{ env.PGDATA }}/logfile
+          retention-days: 14
