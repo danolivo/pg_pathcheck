@@ -34,11 +34,29 @@ jobs:
             libxml2-dev libxslt1-dev \
             uuid-dev
 
+      - name: Get upstream PG master HEAD SHA
+        id: pg_head
+        run: |
+          sha=$(git ls-remote https://git.postgresql.org/git/postgresql.git refs/heads/master | cut -f1)
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "PG master HEAD: $sha"
+
+      - name: Restore cached PG install
+        id: cache_pg
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.PG_INSTALL }}
+            pg_src
+          key: pg-install-${{ steps.pg_head.outputs.sha }}
+
       - name: Clone PostgreSQL master
+        if: steps.cache_pg.outputs.cache-hit != 'true'
         run: |
           git clone --depth=1 https://git.postgresql.org/git/postgresql.git pg_src
 
       - name: Configure PostgreSQL
+        if: steps.cache_pg.outputs.cache-hit != 'true'
         working-directory: pg_src
         run: |
           ./configure \
@@ -55,6 +73,7 @@ jobs:
             --with-uuid=e2fs
 
       - name: Build and install PostgreSQL
+        if: steps.cache_pg.outputs.cache-hit != 'true'
         working-directory: pg_src
         run: |
           make -j$(nproc) -s
@@ -96,8 +115,12 @@ jobs:
 
       - name: Initialise cluster
         run: |
-          initdb -D $PGDATA --no-sync --locale=en_US.UTF-8
-          echo "shared_preload_libraries = 'pg_pathcheck'" >> $PGDATA/postgresql.conf
+          initdb -D $PGDATA --no-sync --no-data-checksums --locale=en_US.UTF-8
+          cat >> $PGDATA/postgresql.conf <<'EOF'
+          shared_preload_libraries = 'pg_pathcheck'
+          fsync = off
+          full_page_writes = off
+          EOF
 
       - name: Start server
         run: |
