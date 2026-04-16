@@ -9,7 +9,9 @@
  *	  cheapest_*_path, non_recursive_path, and every sub-Path field of every
  *	  compound Path type.  Each visited Path is checked for a valid NodeTag;
  *	  a bogus tag (e.g. the 0x7F bytes from CLOBBER_FREED_MEMORY, or a node
- *	  allocated in a freed slot after pfree) is reported as a WARNING.
+ *	  allocated in a freed slot after pfree) is reported as a WARNING together
+ *	  with the relation names resolved from the owning RelOptInfo's relids
+ *	  and the full contents of the containing pathlist.
  *
  *	  planner_shutdown_hook is not handed the top PlannerInfo directly, so we
  *	  stash it from create_upper_paths_hook into PlannerGlobal->extension_state.
@@ -25,12 +27,16 @@
 #include "nodes/pathnodes.h"
 #include "optimizer/extendplan.h"
 #include "optimizer/planner.h"
+#include "utils/guc.h"
 #include "utils/hsearch.h"
 #include "utils/memutils.h"
 
+#define PPC_NAME	"pg_pathcheck"
+#define PPC_VERSION	"0.9"
+
 PG_MODULE_MAGIC_EXT(
-	.name = "pg_pathcheck",
-	.version = "0.9"
+	.name = PPC_NAME,
+	.version = PPC_VERSION
 );
 
 void		_PG_init(void);
@@ -41,6 +47,21 @@ static planner_shutdown_hook_type prev_planner_shutdown_hook = NULL;
 
 /* Lazily resolved ID for our extension_state slot on PlannerGlobal. */
 static int	ppc_ext_id = -1;
+
+/*
+ * GUC: pg_pathcheck.level
+ *		Controls the elevel used when a corrupt Path is detected.
+ *		WARNING (default) logs and continues; ERROR aborts the statement;
+ *		PANIC crashes the backend so you get a core dump for post-mortem.
+ */
+static int	ppc_level = WARNING;
+
+static const struct config_enum_entry ppc_level_options[] = {
+	{"warning", WARNING, false},
+	{"error", ERROR, false},
+	{"panic", PANIC, false},
+	{NULL, 0, false}
+};
 
 /*
  * Visited-pointer hash, rebuilt per top-level walk.  Prevents exponential
@@ -56,11 +77,16 @@ static void ppc_create_upper_paths(PlannerInfo *root, UpperRelationKind stage,
 static void ppc_planner_shutdown(PlannerGlobal *glob, Query *parse,
 								 const char *query_string, PlannedStmt *pstmt);
 static void walk_planner_info(PlannerInfo *root);
-static void walk_rel(RelOptInfo *rel);
-static void walk_pathlist(List *paths);
-static void walk_path(Path *path);
+static void walk_rel(RelOptInfo *rel, PlannerInfo *root);
+static void walk_pathlist(List *paths, const char *listname,
+						  RelOptInfo *rel, PlannerInfo *root);
+static void walk_path(Path *path, const char *source, List *container,
+					   RelOptInfo *rel, PlannerInfo *root);
 static bool mark_visited(void *ptr);
 static bool is_path_tag(NodeTag tag);
+static const char *tag_name(int tag);
+static const char *format_relnames(RelOptInfo *rel, PlannerInfo *root);
+static const char *format_pathlist(List *paths);
 
 
 /*
@@ -70,6 +96,19 @@ static bool is_path_tag(NodeTag tag);
 void
 _PG_init(void)
 {
+	DefineCustomEnumVariable(PPC_NAME ".level",
+							 "Sets the message level on corrupt Path detection.",
+							 "WARNING logs and continues, ERROR aborts the "
+							 "statement, PANIC crashes for a core dump.",
+							 &ppc_level,
+							 WARNING,
+							 ppc_level_options,
+							 PGC_USERSET,
+							 0,
+							 NULL, NULL, NULL);
+
+	MarkGUCPrefixReserved(PPC_NAME);
+
 	prev_create_upper_paths_hook = create_upper_paths_hook;
 	create_upper_paths_hook = ppc_create_upper_paths;
 
@@ -96,7 +135,7 @@ ppc_create_upper_paths(PlannerInfo *root, UpperRelationKind stage,
 		return;
 
 	if (ppc_ext_id < 0)
-		ppc_ext_id = GetPlannerExtensionId("pg_pathcheck");
+		ppc_ext_id = GetPlannerExtensionId(PPC_NAME);
 
 	/*
 	 * SetPlannerGlobalExtensionState palloc's the slot array in planner_cxt,
@@ -127,7 +166,7 @@ ppc_planner_shutdown(PlannerGlobal *glob, Query *parse,
 		ctl.keysize = sizeof(void *);
 		ctl.entrysize = sizeof(void *);
 		ctl.hcxt = CurrentMemoryContext;
-		visited = hash_create("pg_pathcheck visited", 1024, &ctl,
+		visited = hash_create(PPC_NAME " visited", 1024, &ctl,
 							  HASH_ELEM | HASH_BLOBS | HASH_CONTEXT);
 
 		walk_planner_info(top_root);
@@ -136,7 +175,7 @@ ppc_planner_shutdown(PlannerGlobal *glob, Query *parse,
 		foreach(lc, glob->subroots)
 			walk_planner_info(lfirst_node(PlannerInfo, lc));
 
-		walk_pathlist(glob->subpaths);
+		walk_pathlist(glob->subpaths, "glob->subpaths", NULL, top_root);
 
 		hash_destroy(visited);
 		visited = NULL;
@@ -166,7 +205,7 @@ walk_planner_info(PlannerInfo *root)
 	for (i = 0; i <= UPPERREL_FINAL; i++)
 	{
 		foreach(lc, root->upper_rels[i])
-			walk_rel((RelOptInfo *) lfirst(lc));
+			walk_rel((RelOptInfo *) lfirst(lc), root);
 	}
 
 	/* Base rels and appendrel children. */
@@ -178,7 +217,7 @@ walk_planner_info(PlannerInfo *root)
 
 		if (rel == NULL)
 			continue;
-		walk_rel(rel);
+		walk_rel(rel, root);
 		/* Recurse into subquery PlannerInfos. */
 		if (rel->subroot != NULL)
 			walk_planner_info(rel->subroot);
@@ -186,10 +225,11 @@ walk_planner_info(PlannerInfo *root)
 
 	/* Join rels collected during dynamic programming. */
 	foreach(lc, root->join_rel_list)
-		walk_rel((RelOptInfo *) lfirst(lc));
+		walk_rel((RelOptInfo *) lfirst(lc), root);
 
 	/* Non-recursive term of a recursive CTE, if any. */
-	walk_path(root->non_recursive_path);
+	walk_path(root->non_recursive_path, "non_recursive_path", NULL,
+			  NULL, root);
 }
 
 
@@ -198,30 +238,34 @@ walk_planner_info(PlannerInfo *root)
  *		Visit every Path slot on a RelOptInfo.
  */
 static void
-walk_rel(RelOptInfo *rel)
+walk_rel(RelOptInfo *rel, PlannerInfo *root)
 {
 	if (rel == NULL || !mark_visited(rel))
 		return;
 
-	walk_pathlist(rel->pathlist);
-	walk_pathlist(rel->partial_pathlist);
-	walk_pathlist(rel->cheapest_parameterized_paths);
-	walk_path(rel->cheapest_startup_path);
-	walk_path(rel->cheapest_total_path);
+	walk_pathlist(rel->pathlist, "pathlist", rel, root);
+	walk_pathlist(rel->partial_pathlist, "partial_pathlist", rel, root);
+	walk_pathlist(rel->cheapest_parameterized_paths,
+				  "cheapest_parameterized_paths", rel, root);
+	walk_path(rel->cheapest_startup_path, "cheapest_startup_path", NULL,
+			  rel, root);
+	walk_path(rel->cheapest_total_path, "cheapest_total_path", NULL,
+			  rel, root);
 }
 
 
 /*
  * walk_pathlist
- *		Visit each Path in a List.
+ *		Visit each Path in a List, tagging every element with the list's name.
  */
 static void
-walk_pathlist(List *paths)
+walk_pathlist(List *paths, const char *listname,
+			  RelOptInfo *rel, PlannerInfo *root)
 {
 	ListCell   *lc;
 
 	foreach(lc, paths)
-		walk_path((Path *) lfirst(lc));
+		walk_path((Path *) lfirst(lc), listname, paths, rel, root);
 }
 
 
@@ -233,9 +277,14 @@ walk_pathlist(List *paths)
  *		With CLOBBER_FREED_MEMORY the tag becomes 0x7F7F7F7F which fails
  *		is_path_tag; with a real freed-and-reused chunk the odds of landing
  *		on a valid Path tag are vanishingly low.
+ *
+ *		source names the field or list that contains this Path (for diagnostics).
+ *		container, when non-NULL, is the List whose full contents are dumped
+ *		in the errdetail when corruption is detected.
  */
 static void
-walk_path(Path *path)
+walk_path(Path *path, const char *source, List *container,
+		  RelOptInfo *rel, PlannerInfo *root)
 {
 	NodeTag		tag;
 
@@ -247,9 +296,20 @@ walk_path(Path *path)
 	tag = nodeTag(path);
 	if (!is_path_tag(tag))
 	{
-		elog(WARNING,
-			 "pg_pathcheck: Path %p has invalid NodeTag %d (freed or corrupt?)",
-			 path, (int) tag);
+		if (container != NULL)
+			ereport(ppc_level,
+					errmsg(PPC_NAME ": Path %p has invalid NodeTag %s in %s, "
+						   "rel %s",
+						   path, tag_name((int) tag), source,
+						   format_relnames(rel, root)),
+					errdetail("%s contents: %s",
+							  source, format_pathlist(container)));
+		else
+			ereport(ppc_level,
+					errmsg(PPC_NAME ": Path %p has invalid NodeTag %s in %s, "
+						   "rel %s",
+						   path, tag_name((int) tag), source,
+						   format_relnames(rel, root)));
 		return;
 	}
 
@@ -268,99 +328,129 @@ walk_path(Path *path)
 			break;
 
 		case T_BitmapHeapPath:
-			walk_path(((BitmapHeapPath *) path)->bitmapqual);
+			walk_path(((BitmapHeapPath *) path)->bitmapqual,
+					  "BitmapHeapPath.bitmapqual", NULL, rel, root);
 			break;
 		case T_BitmapAndPath:
-			walk_pathlist(((BitmapAndPath *) path)->bitmapquals);
+			walk_pathlist(((BitmapAndPath *) path)->bitmapquals,
+						  "BitmapAndPath.bitmapquals", rel, root);
 			break;
 		case T_BitmapOrPath:
-			walk_pathlist(((BitmapOrPath *) path)->bitmapquals);
+			walk_pathlist(((BitmapOrPath *) path)->bitmapquals,
+						  "BitmapOrPath.bitmapquals", rel, root);
 			break;
 
 		case T_SubqueryScanPath:
-			walk_path(((SubqueryScanPath *) path)->subpath);
+			walk_path(((SubqueryScanPath *) path)->subpath,
+					  "SubqueryScanPath.subpath", NULL, rel, root);
 			break;
 
 		case T_ForeignPath:
-			walk_path(((ForeignPath *) path)->fdw_outerpath);
+			walk_path(((ForeignPath *) path)->fdw_outerpath,
+					  "ForeignPath.fdw_outerpath", NULL, rel, root);
 			break;
 
 		case T_CustomPath:
-			walk_pathlist(((CustomPath *) path)->custom_paths);
+			walk_pathlist(((CustomPath *) path)->custom_paths,
+						  "CustomPath.custom_paths", rel, root);
 			break;
 
 		case T_AppendPath:
-			walk_pathlist(((AppendPath *) path)->subpaths);
+			walk_pathlist(((AppendPath *) path)->subpaths,
+						  "AppendPath.subpaths", rel, root);
 			break;
 		case T_MergeAppendPath:
-			walk_pathlist(((MergeAppendPath *) path)->subpaths);
+			walk_pathlist(((MergeAppendPath *) path)->subpaths,
+						  "MergeAppendPath.subpaths", rel, root);
 			break;
 
 		case T_MaterialPath:
-			walk_path(((MaterialPath *) path)->subpath);
+			walk_path(((MaterialPath *) path)->subpath,
+					  "MaterialPath.subpath", NULL, rel, root);
 			break;
 		case T_MemoizePath:
-			walk_path(((MemoizePath *) path)->subpath);
+			walk_path(((MemoizePath *) path)->subpath,
+					  "MemoizePath.subpath", NULL, rel, root);
 			break;
 		case T_GatherPath:
-			walk_path(((GatherPath *) path)->subpath);
+			walk_path(((GatherPath *) path)->subpath,
+					  "GatherPath.subpath", NULL, rel, root);
 			break;
 		case T_GatherMergePath:
-			walk_path(((GatherMergePath *) path)->subpath);
+			walk_path(((GatherMergePath *) path)->subpath,
+					  "GatherMergePath.subpath", NULL, rel, root);
 			break;
 
 		case T_NestPath:
 		case T_MergePath:
 		case T_HashPath:
-			walk_path(((JoinPath *) path)->outerjoinpath);
-			walk_path(((JoinPath *) path)->innerjoinpath);
+			walk_path(((JoinPath *) path)->outerjoinpath,
+					  "JoinPath.outerjoinpath", NULL, rel, root);
+			walk_path(((JoinPath *) path)->innerjoinpath,
+					  "JoinPath.innerjoinpath", NULL, rel, root);
 			break;
 
 		case T_ProjectionPath:
-			walk_path(((ProjectionPath *) path)->subpath);
+			walk_path(((ProjectionPath *) path)->subpath,
+					  "ProjectionPath.subpath", NULL, rel, root);
 			break;
 		case T_ProjectSetPath:
-			walk_path(((ProjectSetPath *) path)->subpath);
+			walk_path(((ProjectSetPath *) path)->subpath,
+					  "ProjectSetPath.subpath", NULL, rel, root);
 			break;
 		case T_SortPath:
-			walk_path(((SortPath *) path)->subpath);
+			walk_path(((SortPath *) path)->subpath,
+					  "SortPath.subpath", NULL, rel, root);
 			break;
 		case T_IncrementalSortPath:
-			walk_path(((IncrementalSortPath *) path)->spath.subpath);
+			walk_path(((IncrementalSortPath *) path)->spath.subpath,
+					  "IncrementalSortPath.subpath", NULL, rel, root);
 			break;
 		case T_GroupPath:
-			walk_path(((GroupPath *) path)->subpath);
+			walk_path(((GroupPath *) path)->subpath,
+					  "GroupPath.subpath", NULL, rel, root);
 			break;
 		case T_UniquePath:
-			walk_path(((UniquePath *) path)->subpath);
+			walk_path(((UniquePath *) path)->subpath,
+					  "UniquePath.subpath", NULL, rel, root);
 			break;
 		case T_AggPath:
-			walk_path(((AggPath *) path)->subpath);
+			walk_path(((AggPath *) path)->subpath,
+					  "AggPath.subpath", NULL, rel, root);
 			break;
 		case T_GroupingSetsPath:
-			walk_path(((GroupingSetsPath *) path)->subpath);
+			walk_path(((GroupingSetsPath *) path)->subpath,
+					  "GroupingSetsPath.subpath", NULL, rel, root);
 			break;
 		case T_WindowAggPath:
-			walk_path(((WindowAggPath *) path)->subpath);
+			walk_path(((WindowAggPath *) path)->subpath,
+					  "WindowAggPath.subpath", NULL, rel, root);
 			break;
 
 		case T_SetOpPath:
-			walk_path(((SetOpPath *) path)->leftpath);
-			walk_path(((SetOpPath *) path)->rightpath);
+			walk_path(((SetOpPath *) path)->leftpath,
+					  "SetOpPath.leftpath", NULL, rel, root);
+			walk_path(((SetOpPath *) path)->rightpath,
+					  "SetOpPath.rightpath", NULL, rel, root);
 			break;
 		case T_RecursiveUnionPath:
-			walk_path(((RecursiveUnionPath *) path)->leftpath);
-			walk_path(((RecursiveUnionPath *) path)->rightpath);
+			walk_path(((RecursiveUnionPath *) path)->leftpath,
+					  "RecursiveUnionPath.leftpath", NULL, rel, root);
+			walk_path(((RecursiveUnionPath *) path)->rightpath,
+					  "RecursiveUnionPath.rightpath", NULL, rel, root);
 			break;
 
 		case T_LockRowsPath:
-			walk_path(((LockRowsPath *) path)->subpath);
+			walk_path(((LockRowsPath *) path)->subpath,
+					  "LockRowsPath.subpath", NULL, rel, root);
 			break;
 		case T_ModifyTablePath:
-			walk_path(((ModifyTablePath *) path)->subpath);
+			walk_path(((ModifyTablePath *) path)->subpath,
+					  "ModifyTablePath.subpath", NULL, rel, root);
 			break;
 		case T_LimitPath:
-			walk_path(((LimitPath *) path)->subpath);
+			walk_path(((LimitPath *) path)->subpath,
+					  "LimitPath.subpath", NULL, rel, root);
 			break;
 
 		default:
@@ -368,6 +458,126 @@ walk_path(Path *path)
 			Assert(false);
 			break;
 	}
+}
+
+
+/*
+ * Lookup table: NodeTag value → symbolic name.  Generated at build time
+ * from src/backend/nodes/nodetags.h by a sed rule in the Makefile.
+ * Entries for unused slots are NULL.
+ */
+#define PPC_MAX_TAG 502
+static const char * const nodetag_names[PPC_MAX_TAG + 1] = {
+#include "nodetag_names.h"
+};
+
+/*
+ * tag_name
+ *		Return the symbolic name for a NodeTag value, or "UNDEF(nnn)" when
+ *		the value falls outside the known range.
+ */
+static const char *
+tag_name(int tag)
+{
+	static char	buf[32];
+
+	if (tag >= 0 && tag <= PPC_MAX_TAG && nodetag_names[tag] != NULL)
+		return nodetag_names[tag];
+
+	snprintf(buf, sizeof(buf), "UNDEF(%d)", tag);
+	return buf;
+}
+
+
+/*
+ * format_relnames
+ *		Build a human-readable string from the owning RelOptInfo's relids,
+ *		resolving each member through root->simple_rte_array[i]->eref.
+ *		Returns a palloc'd string like "{t1, t2}" or "(unknown)" when
+ *		the rel or root is not available.
+ */
+static const char *
+format_relnames(RelOptInfo *rel, PlannerInfo *root)
+{
+	StringInfoData buf;
+	int			x;
+	bool		first = true;
+
+	if (rel == NULL || rel->relids == NULL || root == NULL)
+		return "(unknown)";
+
+	initStringInfo(&buf);
+	appendStringInfoChar(&buf, '{');
+
+	x = -1;
+	while ((x = bms_next_member(rel->relids, x)) >= 0)
+	{
+		RangeTblEntry *rte;
+
+		if (!first)
+			appendStringInfoString(&buf, ", ");
+		first = false;
+
+		if (x < root->simple_rel_array_size &&
+			root->simple_rte_array != NULL &&
+			(rte = root->simple_rte_array[x]) != NULL &&
+			rte->eref != NULL)
+		{
+			appendStringInfoString(&buf, rte->eref->aliasname);
+		}
+		else
+		{
+			appendStringInfo(&buf, "rel#%d", x);
+		}
+	}
+
+	appendStringInfoChar(&buf, '}');
+	return buf.data;
+}
+
+
+/*
+ * format_pathlist
+ *		Dump the contents of a List of Path pointers: address and NodeTag
+ *		for each element.  Used in errdetail when corruption is detected.
+ */
+static const char *
+format_pathlist(List *paths)
+{
+	StringInfoData buf;
+	ListCell   *lc;
+	int			i = 0;
+
+	if (paths == NIL)
+		return "(empty)";
+
+	initStringInfo(&buf);
+
+	foreach(lc, paths)
+	{
+		Path	   *p = (Path *) lfirst(lc);
+
+		if (i > 0)
+			appendStringInfoString(&buf, ", ");
+
+		if (p == NULL)
+		{
+			appendStringInfo(&buf, "[%d] NULL", i);
+		}
+		else
+		{
+			NodeTag		t = nodeTag(p);
+
+			if (is_path_tag(t))
+				appendStringInfo(&buf, "[%d] %p %s", i, p, tag_name((int) t));
+			else
+				appendStringInfo(&buf, "[%d] %p %s INVALID", i, p,
+								 tag_name((int) t));
+		}
+		i++;
+	}
+
+	return buf.data;
 }
 
 
