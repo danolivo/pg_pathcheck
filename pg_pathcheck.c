@@ -27,6 +27,7 @@
 #include "nodes/pathnodes.h"
 #include "optimizer/extendplan.h"
 #include "optimizer/planner.h"
+#include "tcop/tcopprot.h"
 #include "utils/guc.h"
 #include "utils/hsearch.h"
 #include "utils/memutils.h"
@@ -302,12 +303,16 @@ walk_path(Path *path, const char *source, List *container,
 						   tag_name((int) tag), source,
 						   format_relnames(rel, root)),
 					errdetail("%s contents: %s",
-							  source, format_pathlist(container)));
+							  source, format_pathlist(container)),
+					errhint("query: %s",
+							debug_query_string ? debug_query_string : "(null)"));
 		else
 			ereport(ppc_level,
 					errmsg(PPC_NAME ": invalid NodeTag %s in %s, rel %s",
 						   tag_name((int) tag), source,
-						   format_relnames(rel, root)));
+						   format_relnames(rel, root)),
+					errhint("query: %s",
+							debug_query_string ? debug_query_string : "(null)"));
 		return;
 	}
 
