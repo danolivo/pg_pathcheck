@@ -25,17 +25,13 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -yqq --no-install-recommends \
-            build-essential gcc make flex bison pkg-config \
-            perl libperl-dev \
-            libreadline-dev zlib1g-dev libicu-dev \
-            libssl-dev libpam0g-dev libsystemd-dev \
+            build-essential flex bison pkg-config \
+            libreadline-dev zlib1g-dev \
+            libicu-dev \
+            libssl-dev \
             liblz4-dev libzstd-dev \
             libxml2-dev libxslt1-dev \
-            uuid-dev \
-            gettext \
-            python3 python3-dev \
-            tcl-dev \
-            libldap2-dev libkrb5-dev
+            uuid-dev
 
       - name: Clone PostgreSQL master
         run: |
@@ -49,21 +45,13 @@ jobs:
             --enable-cassert \
             --enable-debug \
             --enable-injection-points \
-            --enable-tap-tests \
             --with-icu \
             --with-openssl \
             --with-lz4 \
             --with-zstd \
             --with-libxml \
             --with-libxslt \
-            --with-uuid=e2fs \
-            --with-perl \
-            --with-python \
-            --with-tcl \
-            --with-pam \
-            --with-ldap \
-            --with-gssapi \
-            --with-systemd
+            --with-uuid=e2fs
 
       - name: Build and install PostgreSQL
         working-directory: pg_src
@@ -77,10 +65,11 @@ jobs:
       - name: Build and install pg_pathcheck
         id: build_ext
         run: |
-          USE_PGXS=1 PG_CONFIG=$PG_INSTALL/bin/pg_config make install 2>&1 | tee build_ext.log
+          USE_PGXS=1 PG_CONFIG=$PG_INSTALL/bin/pg_config make install
 
       - name: Send email on extension build failure
         if: failure() && steps.build_ext.outcome == 'failure'
+        continue-on-error: true
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: ${{ secrets.SMTP_SERVER }}
@@ -106,7 +95,7 @@ jobs:
 
       - name: Initialise cluster
         run: |
-          initdb -D $PGDATA --no-sync
+          initdb -D $PGDATA --no-sync --locale=en_US.UTF-8
           echo "shared_preload_libraries = 'pg_pathcheck'" >> $PGDATA/postgresql.conf
 
       - name: Start server
@@ -116,14 +105,26 @@ jobs:
 
       - name: Run core regression tests
         working-directory: pg_src
-        run: make installcheck
+        run: make -C src/test/regress installcheck
+
+      - name: Summarise pg_pathcheck warnings
+        if: always()
+        run: |
+          echo "### pg_pathcheck warnings" >> "$GITHUB_STEP_SUMMARY"
+          if grep -c 'pg_pathcheck:' $PGDATA/logfile > /dev/null 2>&1; then
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            grep 'pg_pathcheck:' $PGDATA/logfile >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "None detected." >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Stop server
         if: always()
         run: |
           pg_ctl -D $PGDATA stop -m fast || true
 
-      - name: Upload regression diffs on failure
+      - name: Upload artefacts on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
