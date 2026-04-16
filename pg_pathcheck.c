@@ -298,17 +298,15 @@ walk_path(Path *path, const char *source, List *container,
 	{
 		if (container != NULL)
 			ereport(ppc_level,
-					errmsg(PPC_NAME ": Path %p has invalid NodeTag %s in %s, "
-						   "rel %s",
-						   path, tag_name((int) tag), source,
+					errmsg(PPC_NAME ": invalid NodeTag %s in %s, rel %s",
+						   tag_name((int) tag), source,
 						   format_relnames(rel, root)),
 					errdetail("%s contents: %s",
 							  source, format_pathlist(container)));
 		else
 			ereport(ppc_level,
-					errmsg(PPC_NAME ": Path %p has invalid NodeTag %s in %s, "
-						   "rel %s",
-						   path, tag_name((int) tag), source,
+					errmsg(PPC_NAME ": invalid NodeTag %s in %s, rel %s",
+						   tag_name((int) tag), source,
 						   format_relnames(rel, root)));
 		return;
 	}
@@ -558,7 +556,7 @@ format_pathlist(List *paths)
 		Path	   *p = (Path *) lfirst(lc);
 
 		if (i > 0)
-			appendStringInfoString(&buf, ", ");
+			appendStringInfoString(&buf, "; ");
 
 		if (p == NULL)
 		{
@@ -569,9 +567,9 @@ format_pathlist(List *paths)
 			NodeTag		t = nodeTag(p);
 
 			if (is_path_tag(t))
-				appendStringInfo(&buf, "[%d] %p %s", i, p, tag_name((int) t));
+				appendStringInfo(&buf, "[%d] %s", i, tag_name((int) t));
 			else
-				appendStringInfo(&buf, "[%d] %p %s INVALID", i, p,
+				appendStringInfo(&buf, "[%d] %s INVALID", i,
 								 tag_name((int) t));
 		}
 		i++;

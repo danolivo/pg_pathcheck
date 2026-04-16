@@ -1,4 +1,4 @@
-name: PG regression with pg_pathcheck
+name: PG check-world with pg_pathcheck
 
 on:
   push:
@@ -9,13 +9,15 @@ on:
     - cron: '17 3 * * *'
 
 jobs:
-  regress:
+  check_world:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 180
 
     env:
       PG_INSTALL: ${{ github.workspace }}/pg_install
-      PGDATA: ${{ github.workspace }}/pgdata
+      # Every temp cluster spawned by pg_regress or PostgreSQL::Test::Cluster
+      # reads this file and appends it to its postgresql.conf.
+      TEMP_CONFIG: ${{ github.workspace }}/pg_pathcheck.conf
 
     steps:
       - name: Check out pg_pathcheck
@@ -64,6 +66,7 @@ jobs:
             --enable-cassert \
             --enable-debug \
             --enable-injection-points \
+            --enable-tap-tests \
             --with-icu \
             --with-openssl \
             --with-lz4 \
@@ -113,47 +116,36 @@ jobs:
 
             Check the build log for details.
 
-      - name: Initialise cluster
+      - name: Prepare TEMP_CONFIG for every spawned cluster
         run: |
-          initdb -D $PGDATA --no-sync --no-data-checksums --locale=en_US.UTF-8
-          cat >> $PGDATA/postgresql.conf <<'EOF'
+          cat > "$TEMP_CONFIG" <<'EOF'
           shared_preload_libraries = 'pg_pathcheck'
           fsync = off
           full_page_writes = off
           EOF
+          cat "$TEMP_CONFIG"
 
-      - name: Start server
-        run: |
-          pg_ctl -D $PGDATA -l $PGDATA/logfile start
-          pg_isready -t 30
-
-      - name: Run core regression tests
+      - name: Run make check-world
         working-directory: pg_src
-        run: make -C src/test/regress installcheck
+        run: make check-world -j$(nproc)
 
-      - name: Summarise pg_pathcheck warnings
+      - name: Gather pg_pathcheck warnings
         if: always()
         run: |
           echo "### pg_pathcheck warnings" >> "$GITHUB_STEP_SUMMARY"
-          if grep -c 'pg_pathcheck:' $PGDATA/logfile > /dev/null 2>&1; then
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            grep 'pg_pathcheck:' $PGDATA/logfile >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "None detected." >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-      - name: Stop server
-        if: always()
-        run: |
-          pg_ctl -D $PGDATA stop -m fast || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          ./scripts/gather-warnings.sh pg_src >> "$GITHUB_STEP_SUMMARY" 2>&1 || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload artefacts on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: regression-diffs
+          name: check-world-logs
           path: |
-            pg_src/src/test/regress/regression.diffs
-            ${{ env.PGDATA }}/logfile
+            pg_src/**/regression.diffs
+            pg_src/**/tmp_check/log/**
+            pg_src/**/log/**
+            pg_src/**/results/*.out
+            pg_src/**/output_iso/**
           retention-days: 14
