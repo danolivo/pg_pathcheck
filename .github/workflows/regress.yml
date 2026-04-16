@@ -25,8 +25,17 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -yqq --no-install-recommends \
-            gcc make flex bison perl \
-            libreadline-dev zlib1g-dev libicu-dev pkg-config
+            build-essential gcc make flex bison pkg-config \
+            perl libperl-dev \
+            libreadline-dev zlib1g-dev libicu-dev \
+            libssl-dev libpam0g-dev libsystemd-dev \
+            liblz4-dev libzstd-dev \
+            libxml2-dev libxslt1-dev \
+            uuid-dev \
+            gettext \
+            python3 python3-dev \
+            tcl-dev \
+            libldap2-dev libkrb5-dev
 
       - name: Clone PostgreSQL master
         run: |
@@ -39,13 +48,31 @@ jobs:
             --prefix=$PG_INSTALL \
             --enable-cassert \
             --enable-debug \
-            --enable-injection-points
+            --enable-injection-points \
+            --enable-tap-tests \
+            --with-icu \
+            --with-openssl \
+            --with-lz4 \
+            --with-zstd \
+            --with-libxml \
+            --with-libxslt \
+            --with-uuid=e2fs \
+            --with-perl \
+            --with-python \
+            --with-tcl \
+            --with-pam \
+            --with-ldap \
+            --with-gssapi \
+            --with-systemd
 
       - name: Build and install PostgreSQL
         working-directory: pg_src
         run: |
           make -j$(nproc) -s
           make install -s
+
+      - name: Add PG bin to PATH
+        run: echo "$PG_INSTALL/bin" >> "$GITHUB_PATH"
 
       - name: Build and install pg_pathcheck
         id: build_ext
@@ -79,26 +106,22 @@ jobs:
 
       - name: Initialise cluster
         run: |
-          $PG_INSTALL/bin/initdb -D $PGDATA --no-sync
+          initdb -D $PGDATA --no-sync
           echo "shared_preload_libraries = 'pg_pathcheck'" >> $PGDATA/postgresql.conf
 
       - name: Start server
         run: |
-          $PG_INSTALL/bin/pg_ctl -D $PGDATA -l $PGDATA/logfile start
-          $PG_INSTALL/bin/pg_isready -t 30
+          pg_ctl -D $PGDATA -l $PGDATA/logfile start
+          pg_isready -t 30
 
       - name: Run core regression tests
         working-directory: pg_src
-        run: |
-          make -C src/test/regress installcheck \
-            EXTRA_REGRESS_OPTS="--bindir=$PG_INSTALL/bin"
-        env:
-          PATH: ${{ env.PG_INSTALL }}/bin:${{ env.PATH }}
+        run: make installcheck
 
       - name: Stop server
         if: always()
         run: |
-          $PG_INSTALL/bin/pg_ctl -D $PGDATA stop -m fast || true
+          pg_ctl -D $PGDATA stop -m fast || true
 
       - name: Upload regression diffs on failure
         if: failure()
