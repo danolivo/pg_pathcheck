@@ -5,6 +5,7 @@
 # pg_pathcheck
 
 PostgreSQL extension that validates the planner's final Path tree, detecting freed or corrupt memory by walking every reachable Path and checking NodeTags.
+Reports and analyses of findings are published on the [project wiki](https://github.com/danolivo/pg_pathcheck/wiki).
 
 ## How it works
 
