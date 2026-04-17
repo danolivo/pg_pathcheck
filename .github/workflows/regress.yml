@@ -44,6 +44,9 @@ jobs:
           echo "PG master HEAD: $sha"
 
       - name: Restore cached PG install
+        # Temporarily disabled: every run does a full PG build from scratch.
+        # Flip to `true` (or remove this `if`) to re-enable caching.
+        if: false
         id: cache_pg
         uses: actions/cache@v4
         with:
@@ -56,6 +59,26 @@ jobs:
         if: steps.cache_pg.outputs.cache-hit != 'true'
         run: |
           git clone --depth=1 https://git.postgresql.org/git/postgresql.git pg_src
+
+      - name: Graft pg_pathcheck into pg_src/contrib
+        run: |
+          # Placing the extension inside the PG tree lets `make install`
+          # (and therefore the `make temp-install` used by ECPG and friends)
+          # bake it into tmp_install alongside core.  Done on every run so
+          # an updated extension source is picked up on cache hits too.
+          mkdir -p pg_src/contrib/pg_pathcheck
+          rsync -a --delete \
+            --exclude='.git' --exclude='.github' \
+            --exclude='pg_src' --exclude='pg_install' \
+            --exclude='*.o' --exclude='*.so' --exclude='*.dylib' \
+            --exclude='nodetag_names.h' \
+            ./ pg_src/contrib/pg_pathcheck/
+          # Register in contrib/Makefile SUBDIRS if it isn't already.
+          # Use perl for a reliable tab-indented injection.
+          grep -q 'pg_pathcheck' pg_src/contrib/Makefile || \
+            perl -i -pe 's{^(SUBDIRS = \\)$}{$1\n\t\tpg_pathcheck \\}' \
+                pg_src/contrib/Makefile
+          grep pg_pathcheck pg_src/contrib/Makefile
 
       - name: Configure PostgreSQL
         if: steps.cache_pg.outputs.cache-hit != 'true'
@@ -75,23 +98,27 @@ jobs:
             --with-libxslt \
             --with-uuid=e2fs
 
-      - name: Build and install PostgreSQL
+      - name: Build and install PostgreSQL (includes pg_pathcheck)
         if: steps.cache_pg.outputs.cache-hit != 'true'
+        id: build_ext
         working-directory: pg_src
         run: |
           make -j$(nproc) -s
           make install -s
 
+      - name: Rebuild pg_pathcheck on cache hit
+        if: steps.cache_pg.outputs.cache-hit == 'true'
+        id: build_ext_cached
+        working-directory: pg_src/contrib/pg_pathcheck
+        run: |
+          make -s clean
+          make -s install
+
       - name: Add PG bin to PATH
         run: echo "$PG_INSTALL/bin" >> "$GITHUB_PATH"
 
-      - name: Build and install pg_pathcheck
-        id: build_ext
-        run: |
-          USE_PGXS=1 PG_CONFIG=$PG_INSTALL/bin/pg_config make install
-
       - name: Send email on extension build failure
-        if: failure() && steps.build_ext.outcome == 'failure'
+        if: failure() && (steps.build_ext.outcome == 'failure' || steps.build_ext_cached.outcome == 'failure')
         continue-on-error: true
         uses: dawidd6/action-send-mail@v3
         with:
@@ -120,14 +147,12 @@ jobs:
         run: |
           cat > "$TEMP_CONFIG" <<'EOF'
           shared_preload_libraries = 'pg_pathcheck'
-          fsync = off
-          full_page_writes = off
           EOF
           cat "$TEMP_CONFIG"
 
       - name: Run make check-world
         working-directory: pg_src
-        run: make check-world -j$(nproc)
+        run: make -k check-world
 
       - name: Gather pg_pathcheck warnings
         if: always()
