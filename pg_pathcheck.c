@@ -65,9 +65,9 @@ static const struct config_enum_entry ppc_level_options[] = {
 };
 
 /*
- * Visited-pointer hash, rebuilt per top-level walk.  Prevents exponential
- * blow-up when the same sub-path is reachable from multiple parents
- * (AppendPath children, cheapest_*_path aliases, etc.).
+ * Visited-pointer hash, rebuilt per top-level walk. Deduplication tool.
+ * Prevents exponential blow-up when the same sub-path is reachable from
+ * multiple parents (AppendPath children, cheapest_*_path aliases, etc.).
  */
 static HTAB *visited = NULL;
 
@@ -135,14 +135,12 @@ ppc_create_upper_paths(PlannerInfo *root, UpperRelationKind stage,
 	if (root->parent_root != NULL || stage != UPPERREL_FINAL)
 		return;
 
+	/*
+	 * Top root is not presented in the 'glob' structures. So, extension
+	 * should save this pointer here for the furhter use.
+	 */
 	if (ppc_ext_id < 0)
 		ppc_ext_id = GetPlannerExtensionId(PPC_NAME);
-
-	/*
-	 * SetPlannerGlobalExtensionState palloc's the slot array in planner_cxt,
-	 * so it is freed automatically whether the planner exits cleanly or via
-	 * elog(ERROR).  No leak, no dangling pointer across invocations.
-	 */
 	SetPlannerGlobalExtensionState(root->glob, ppc_ext_id, root);
 }
 
@@ -161,21 +159,30 @@ ppc_planner_shutdown(PlannerGlobal *glob, Query *parse,
 		(top_root = GetPlannerGlobalExtensionState(glob, ppc_ext_id)) != NULL)
 	{
 		HASHCTL		ctl;
-		ListCell   *lc;
 
 		MemSet(&ctl, 0, sizeof(ctl));
 		ctl.keysize = sizeof(void *);
 		ctl.entrysize = sizeof(void *);
 		ctl.hcxt = CurrentMemoryContext;
+
+		/*
+		 * Do not care about previous value of the pointer. It might stay
+		 * initialised in case of previous internal error. But memory already
+		 * freed because of transactional memory context.
+		 */
 		visited = hash_create(PPC_NAME " visited", 1024, &ctl,
 							  HASH_ELEM | HASH_BLOBS | HASH_CONTEXT);
 
 		walk_planner_info(top_root);
 
 		/* Subplan PlannerInfos and their backing top-level Paths. */
-		foreach(lc, glob->subroots)
-			walk_planner_info(lfirst_node(PlannerInfo, lc));
+		foreach_node(PlannerInfo, root, glob->subroots)
+			walk_planner_info(root);
 
+		/*
+		 * Deliberately duplicated crawler - just to find potential
+		 * low-probability discrepancies or dangled pointers in this list itself
+		 */
 		walk_pathlist(glob->subpaths, "glob->subpaths", NULL, top_root);
 
 		hash_destroy(visited);
@@ -194,7 +201,6 @@ ppc_planner_shutdown(PlannerGlobal *glob, Query *parse,
 static void
 walk_planner_info(PlannerInfo *root)
 {
-	ListCell   *lc;
 	int			i;
 
 	if (root == NULL || !mark_visited(root))
@@ -205,8 +211,8 @@ walk_planner_info(PlannerInfo *root)
 	/* Upper rels: one List per UpperRelationKind. */
 	for (i = 0; i <= UPPERREL_FINAL; i++)
 	{
-		foreach(lc, root->upper_rels[i])
-			walk_rel((RelOptInfo *) lfirst(lc), root);
+		foreach_node(RelOptInfo, rel, root->upper_rels[i])
+			walk_rel(rel, root);
 	}
 
 	/* Base rels and appendrel children. */
@@ -225,8 +231,8 @@ walk_planner_info(PlannerInfo *root)
 	}
 
 	/* Join rels collected during dynamic programming. */
-	foreach(lc, root->join_rel_list)
-		walk_rel((RelOptInfo *) lfirst(lc), root);
+	foreach_node(RelOptInfo, rel, root->join_rel_list)
+		walk_rel(rel, root);
 
 	/* Non-recursive term of a recursive CTE, if any. */
 	walk_path(root->non_recursive_path, "non_recursive_path", NULL,
@@ -236,7 +242,10 @@ walk_planner_info(PlannerInfo *root)
 
 /*
  * walk_rel
- *		Visit every Path slot on a RelOptInfo.
+ *		Visit every Path slot on a RelOptInfo, and recurse into parallel
+ *		RelOptInfos that hang off it (unique_rel, grouped_rel, part_rels[]).
+ *		Upward links (parent / top_parent) are intentionally not followed:
+ *		those rels are reached via simple_rel_array or join_rel_list anyway.
  */
 static void
 walk_rel(RelOptInfo *rel, PlannerInfo *root)
@@ -252,6 +261,25 @@ walk_rel(RelOptInfo *rel, PlannerInfo *root)
 			  rel, root);
 	walk_path(rel->cheapest_total_path, "cheapest_total_path", NULL,
 			  rel, root);
+
+	/*
+	 * Recurse into special RelOptInfos in case their paths are washed out of
+	 * the main pathlist.
+	 */
+	if (rel->unique_rel != NULL)
+		walk_rel(rel->unique_rel, root);
+	if (rel->grouped_rel != NULL)
+		walk_rel(rel->grouped_rel, root);
+
+	/* Purely rendundant. Just to be paranoid. */
+	if (rel->part_rels != NULL)
+	{
+		int	i;
+
+		for (i = 0; i < rel->nparts; i++)
+			if (rel->part_rels[i] != NULL)
+				walk_rel(rel->part_rels[i], root);
+	}
 }
 
 
@@ -318,6 +346,22 @@ walk_path(Path *path, const char *source, List *container,
 
 	if (!mark_visited(path))
 		return;
+
+	/*
+	 * ParamPathInfo lifetime check.  path->param_info points to a
+	 * ParamPathInfo shared among parameterised paths on the same rel (the
+	 * rel's ppilist caches them).  A ParamPathInfo freed while still
+	 * referenced here is the same class of bug we are hunting for Paths,
+	 * so sanity-check its tag.
+	 */
+	if (path->param_info != NULL &&
+		!IsA(path->param_info, ParamPathInfo))
+		ereport(ppc_level,
+				errmsg(PPC_NAME ": invalid ParamPathInfo tag %s via %s.param_info, rel %s",
+					   tag_name((int) nodeTag(path->param_info)), source,
+					   format_relnames(rel, root)),
+				errhint("query: %s",
+						debug_query_string ? debug_query_string : "(null)"));
 
 	switch (tag)
 	{
@@ -591,7 +635,7 @@ format_pathlist(List *paths)
 static bool
 mark_visited(void *ptr)
 {
-	bool		found;
+	bool	found;
 
 	Assert(visited != NULL);
 	Assert(ptr != NULL);
