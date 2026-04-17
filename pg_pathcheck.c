@@ -50,14 +50,14 @@ static planner_shutdown_hook_type prev_planner_shutdown_hook = NULL;
 static int	ppc_ext_id = -1;
 
 /*
- * GUC: pg_pathcheck.level
- *		Controls the elevel used when a corrupt Path is detected.
+ * GUC: pg_pathcheck.elevel
+ *		The elevel passed to ereport() when a corrupt Path is detected.
  *		WARNING (default) logs and continues; ERROR aborts the statement;
  *		PANIC crashes the backend so you get a core dump for post-mortem.
  */
-static int	ppc_level = WARNING;
+static int	ppc_elevel = WARNING;
 
-static const struct config_enum_entry ppc_level_options[] = {
+static const struct config_enum_entry ppc_elevel_options[] = {
 	{"warning", WARNING, false},
 	{"error", ERROR, false},
 	{"panic", PANIC, false},
@@ -100,13 +100,13 @@ static const char *format_pathlist(List *paths);
 void
 _PG_init(void)
 {
-	DefineCustomEnumVariable(PPC_NAME ".level",
-							 "Sets the message level on corrupt Path detection.",
+	DefineCustomEnumVariable(PPC_NAME ".elevel",
+							 "elevel used when a corrupt Path is detected.",
 							 "WARNING logs and continues, ERROR aborts the "
 							 "statement, PANIC crashes for a core dump.",
-							 &ppc_level,
+							 &ppc_elevel,
 							 WARNING,
-							 ppc_level_options,
+							 ppc_elevel_options,
 							 PGC_USERSET,
 							 0,
 							 NULL, NULL, NULL);
@@ -350,7 +350,7 @@ verify_path_parent(Path *path, RelOptInfo *expected, const char *source,
 	 */
 	if (actual == NULL || !IsA(actual, RelOptInfo))
 	{
-		ereport(ppc_level,
+		ereport(ppc_elevel,
 				errmsg(PPC_NAME ": path has non-RelOptInfo parent in %s, target rel %s",
 					   source, format_relnames(expected, root)),
 				errhint("query: %s",
@@ -371,7 +371,7 @@ verify_path_parent(Path *path, RelOptInfo *expected, const char *source,
 	 * Classic same-size-class alias: the slot was reused by another rel's
 	 * path.  Name both rels by their contributing base relations.
 	 */
-	ereport(ppc_level,
+	ereport(ppc_elevel,
 			errmsg(PPC_NAME ": path parent mismatch in %s, target rel %s",
 				   source, format_relnames(expected, root)),
 			container != NULL
@@ -431,7 +431,7 @@ walk_path(Path *path, const char *source, List *container,
 	tag = nodeTag(path);
 	if (!is_path_tag(tag))
 	{
-		ereport(ppc_level,
+		ereport(ppc_elevel,
 				errmsg(PPC_NAME ": invalid NodeTag %s in %s, rel %s",
 					   tag_name((int) tag), source,
 					   format_relnames(rel, root)),
