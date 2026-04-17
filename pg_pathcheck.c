@@ -140,7 +140,7 @@ ppc_create_upper_paths(PlannerInfo *root, UpperRelationKind stage,
 
 	/*
 	 * Top root is not presented in the 'glob' structures. So, extension
-	 * should save this pointer here for the furhter use.
+	 * should save this pointer here for the further use.
 	 */
 	if (ppc_ext_id < 0)
 		ppc_ext_id = GetPlannerExtensionId(PPC_NAME);
@@ -161,16 +161,15 @@ ppc_planner_shutdown(PlannerGlobal *glob, Query *parse,
 	if (ppc_ext_id >= 0 &&
 		(top_root = GetPlannerGlobalExtensionState(glob, ppc_ext_id)) != NULL)
 	{
-		HASHCTL		ctl;
+		HASHCTL		ctl = {0};
 
-		MemSet(&ctl, 0, sizeof(ctl));
 		ctl.keysize = sizeof(void *);
 		ctl.entrysize = sizeof(void *);
 		ctl.hcxt = CurrentMemoryContext;
 
 		/*
 		 * Do not care about previous value of the pointer. It might stay
-		 * initialised in case of previous internal error. But memory already
+		 * initialized in case of previous internal error. But memory already
 		 * freed because of transactional memory context.
 		 */
 		visited = hash_create(PPC_NAME " visited", 1024, &ctl,
@@ -303,7 +302,7 @@ walk_rel(RelOptInfo *rel, PlannerInfo *root)
 	if (rel->grouped_rel != NULL)
 		walk_rel(rel->grouped_rel, root);
 
-	/* Purely rendundant. Just to be paranoid. */
+	/* Purely redundant. Just to be paranoid. */
 	if (rel->part_rels != NULL)
 	{
 		int	i;
@@ -341,12 +340,13 @@ verify_path_parent(Path *path, RelOptInfo *expected, const char *source,
 		return;
 
 	actual = path->parent;
-	if (IS_UPPER_REL(actual) || actual == expected)
+	if (actual == expected)
 		return;
 
 	/*
-	 * ->parent doesn't match.  As the memory reused it might happen we see a
-	 * sort of garbage here.
+	 * ->parent doesn't match.  As the memory is reused it might happen we see
+	 * a sort of garbage here, so validate the pointer before dereferencing it
+	 * via IS_UPPER_REL (which reads ->reloptkind).
 	 */
 	if (actual == NULL || !IsA(actual, RelOptInfo))
 	{
@@ -359,30 +359,33 @@ verify_path_parent(Path *path, RelOptInfo *expected, const char *source,
 	}
 
 	/*
+	 * Upper rels legitimately carry paths whose ->parent is the input rel
+	 * (see apply_scanjoin_target_to_paths and friends).  We filter these out
+	 * here rather than in walk_rel so that a garbage ->parent is still caught
+	 * by the IsA check above.
+	 */
+	if (IS_UPPER_REL(actual))
+		return;
+
+	/*
 	 * Classic same-size-class alias: the slot was reused by another rel's
 	 * path.  Name both rels by their contributing base relations.
 	 */
-	if (container != NULL)
-		ereport(ppc_level,
-				errmsg(PPC_NAME ": path parent mismatch in %s, target rel %s",
-					   source, format_relnames(expected, root)),
-				errdetail("path %s claims rel %s, path signature: rows: %.0lf, scost: %.2lf, tcost: %.2lf; %s contents: %s",
-						  tag_name(path->type),
-						  actual->relids != NULL ? nodeToString(actual->relids) : "UPPER_REL",
-							path->rows, path->startup_cost, path->total_cost,
-						  source, format_pathlist(container)),
-				errhint("query: %s",
-						debug_query_string ? debug_query_string : "(null)"));
-	else
-		ereport(ppc_level,
-				errmsg(PPC_NAME ": path parent mismatch in %s, target rel %s",
-					   source, format_relnames(expected, root)),
-				errdetail("path %s claims rel %s, path signature: rows: %.0lf, scost: %.2lf, tcost: %.2lf",
-						  tag_name(path->type),
-						  actual->relids != NULL ? nodeToString(actual->relids) : "UPPER_REL",
-							path->rows, path->startup_cost, path->total_cost),
-				errhint("query: %s",
-						debug_query_string ? debug_query_string : "(null)"));
+	ereport(ppc_level,
+			errmsg(PPC_NAME ": path parent mismatch in %s, target rel %s",
+				   source, format_relnames(expected, root)),
+			container != NULL
+			? errdetail("path %s claims rel %s, path signature: rows: %.0lf, scost: %.2lf, tcost: %.2lf; %s contents: %s",
+						tag_name(path->type),
+						actual->relids != NULL ? nodeToString(actual->relids) : "UPPER_REL",
+						path->rows, path->startup_cost, path->total_cost,
+						source, format_pathlist(container))
+			: errdetail("path %s claims rel %s, path signature: rows: %.0lf, scost: %.2lf, tcost: %.2lf",
+						tag_name(path->type),
+						actual->relids != NULL ? nodeToString(actual->relids) : "UPPER_REL",
+						path->rows, path->startup_cost, path->total_cost),
+			errhint("query: %s",
+					debug_query_string ? debug_query_string : "(null)"));
 }
 
 
@@ -428,22 +431,16 @@ walk_path(Path *path, const char *source, List *container,
 	tag = nodeTag(path);
 	if (!is_path_tag(tag))
 	{
-		if (container != NULL)
-			ereport(ppc_level,
-					errmsg(PPC_NAME ": invalid NodeTag %s in %s, rel %s",
-						   tag_name((int) tag), source,
-						   format_relnames(rel, root)),
-					errdetail("%s contents: %s",
-							  source, format_pathlist(container)),
-					errhint("query: %s",
-							debug_query_string ? debug_query_string : "(null)"));
-		else
-			ereport(ppc_level,
-					errmsg(PPC_NAME ": invalid NodeTag %s in %s, rel %s",
-						   tag_name((int) tag), source,
-						   format_relnames(rel, root)),
-					errhint("query: %s",
-							debug_query_string ? debug_query_string : "(null)"));
+		ereport(ppc_level,
+				errmsg(PPC_NAME ": invalid NodeTag %s in %s, rel %s",
+					   tag_name((int) tag), source,
+					   format_relnames(rel, root)),
+				container != NULL
+				? errdetail("%s contents: %s",
+							source, format_pathlist(container))
+				: 0,
+				errhint("query: %s",
+						debug_query_string ? debug_query_string : "(null)"));
 		return;
 	}
 
@@ -603,28 +600,29 @@ walk_path(Path *path, const char *source, List *container,
 /*
  * Lookup table: NodeTag value → symbolic name.  Generated at build time
  * from src/backend/nodes/nodetags.h by a sed rule in the Makefile.
- * Entries for unused slots are NULL.
+ * Entries for unused slots are NULL.  The array size auto-tracks the
+ * highest designated-initializer index emitted by the generator, so new
+ * upstream tags don't silently overflow.
  */
-#define PPC_MAX_TAG 502
-static const char * const nodetag_names[PPC_MAX_TAG + 1] = {
+static const char * const nodetag_names[] = {
 #include "nodetag_names.h"
 };
 
 /*
  * tag_name
  *		Return the symbolic name for a NodeTag value, or "UNDEF(nnn)" when
- *		the value falls outside the known range.
+ *		the value falls outside the known range.  The UNDEF string is
+ *		allocated in the current memory context on each call; the caller
+ *		typically consumes it immediately inside an ereport.
  */
 static const char *
 tag_name(int tag)
 {
-	static char	buf[32];
-
-	if (tag >= 0 && tag <= PPC_MAX_TAG && nodetag_names[tag] != NULL)
+	if (tag >= 0 && tag < (int) lengthof(nodetag_names) &&
+		nodetag_names[tag] != NULL)
 		return nodetag_names[tag];
 
-	snprintf(buf, sizeof(buf), "UNDEF(%d)", tag);
-	return buf;
+	return psprintf("UNDEF(%d)", tag);
 }
 
 
