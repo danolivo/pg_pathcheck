@@ -341,7 +341,7 @@ verify_path_parent(Path *path, RelOptInfo *expected, const char *source,
 		return;
 
 	actual = path->parent;
-	if (actual == expected)
+	if (IS_UPPER_REL(actual) || actual == expected)
 		return;
 
 	/*
@@ -366,8 +366,10 @@ verify_path_parent(Path *path, RelOptInfo *expected, const char *source,
 		ereport(ppc_level,
 				errmsg(PPC_NAME ": path parent mismatch in %s, target rel %s",
 					   source, format_relnames(expected, root)),
-				errdetail("path claims rel %s; %s contents: %s",
-						  format_relnames(actual, root),
+				errdetail("path %s claims rel %s, path signature: rows: %.0lf, scost: %.2lf, tcost: %.2lf; %s contents: %s",
+						  tag_name(path->type),
+						  actual->relids != NULL ? nodeToString(actual->relids) : "UPPER_REL",
+							path->rows, path->startup_cost, path->total_cost,
 						  source, format_pathlist(container)),
 				errhint("query: %s",
 						debug_query_string ? debug_query_string : "(null)"));
@@ -375,8 +377,10 @@ verify_path_parent(Path *path, RelOptInfo *expected, const char *source,
 		ereport(ppc_level,
 				errmsg(PPC_NAME ": path parent mismatch in %s, target rel %s",
 					   source, format_relnames(expected, root)),
-				errdetail("path claims rel %s",
-						  format_relnames(actual, root)),
+				errdetail("path %s claims rel %s, path signature: rows: %.0lf, scost: %.2lf, tcost: %.2lf",
+						  tag_name(path->type),
+						  actual->relids != NULL ? nodeToString(actual->relids) : "UPPER_REL",
+							path->rows, path->startup_cost, path->total_cost),
 				errhint("query: %s",
 						debug_query_string ? debug_query_string : "(null)"));
 }
