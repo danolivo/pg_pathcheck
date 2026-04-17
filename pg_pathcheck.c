@@ -83,6 +83,9 @@ static void walk_pathlist(List *paths, const char *listname,
 						  RelOptInfo *rel, PlannerInfo *root);
 static void walk_path(Path *path, const char *source, List *container,
 					   RelOptInfo *rel, PlannerInfo *root);
+static void verify_path_parent(Path *path, RelOptInfo *expected,
+							   const char *source, List *container,
+							   PlannerInfo *root);
 static bool mark_visited(void *ptr);
 static bool is_path_tag(NodeTag tag);
 static const char *tag_name(int tag);
@@ -250,8 +253,37 @@ walk_planner_info(PlannerInfo *root)
 static void
 walk_rel(RelOptInfo *rel, PlannerInfo *root)
 {
+	ListCell   *lc;
+
 	if (rel == NULL || !mark_visited(rel))
 		return;
+
+	/*
+	 * Parent-match check for every Path directly attached to this rel.
+	 * If a slot has been reused by a Path built for another rel
+	 * (same-size-class aliasing that survives the NodeTag check), the
+	 * reused Path's ->parent points to its real owner, not to us.
+	 *
+	 * Skip upper rels: their pathlists legitimately carry paths whose
+	 * ->parent is the input rel (see apply_scanjoin_target_to_paths and
+	 * similar).  The invariant only holds for base and join rels.
+	 */
+	if (!IS_UPPER_REL(rel))
+	{
+		foreach(lc, rel->pathlist)
+			verify_path_parent(lfirst(lc), rel, "pathlist",
+							   rel->pathlist, root);
+		foreach(lc, rel->partial_pathlist)
+			verify_path_parent(lfirst(lc), rel, "partial_pathlist",
+							   rel->partial_pathlist, root);
+		foreach(lc, rel->cheapest_parameterized_paths)
+			verify_path_parent(lfirst(lc), rel, "cheapest_parameterized_paths",
+							   rel->cheapest_parameterized_paths, root);
+		verify_path_parent(rel->cheapest_startup_path, rel,
+						   "cheapest_startup_path", NULL, root);
+		verify_path_parent(rel->cheapest_total_path, rel,
+						   "cheapest_total_path", NULL, root);
+	}
 
 	walk_pathlist(rel->pathlist, "pathlist", rel, root);
 	walk_pathlist(rel->partial_pathlist, "partial_pathlist", rel, root);
@@ -280,6 +312,73 @@ walk_rel(RelOptInfo *rel, PlannerInfo *root)
 			if (rel->part_rels[i] != NULL)
 				walk_rel(rel->part_rels[i], root);
 	}
+}
+
+
+/*
+ * verify_path_parent
+ *		Confirm that a Path found directly on rel's own pathlist-family
+ *		fields actually claims rel as its parent.  A mismatch catches the
+ *		aliasing case that escapes the NodeTag check: the memory chunk was
+ *		freed and re-allocated as a different Path (possibly belonging to
+ *		another rel) within the same planning session.
+ *
+ *		Called only from walk_rel, never from the sub-path recursion —
+ *		inside compound Path nodes the parent legitimately varies (e.g.,
+ *		JoinPath.outerjoinpath belongs to the child rel, not the join rel).
+ */
+static void
+verify_path_parent(Path *path, RelOptInfo *expected, const char *source,
+				   List *container, PlannerInfo *root)
+{
+	RelOptInfo *actual;
+
+	/*
+	 * Skip NULL and paths with an invalid NodeTag: walk_path already
+	 * reports those, and ->parent on a bogus chunk is not readable.
+	 */
+	if (path == NULL || !is_path_tag(nodeTag(path)))
+		return;
+
+	actual = path->parent;
+	if (actual == expected)
+		return;
+
+	/*
+	 * ->parent doesn't match.  As the memory reused it might happen we see a
+	 * sort of garbage here.
+	 */
+	if (actual == NULL || !IsA(actual, RelOptInfo))
+	{
+		ereport(ppc_level,
+				errmsg(PPC_NAME ": path has non-RelOptInfo parent in %s, target rel %s",
+					   source, format_relnames(expected, root)),
+				errhint("query: %s",
+						debug_query_string ? debug_query_string : "(null)"));
+		return;
+	}
+
+	/*
+	 * Classic same-size-class alias: the slot was reused by another rel's
+	 * path.  Name both rels by their contributing base relations.
+	 */
+	if (container != NULL)
+		ereport(ppc_level,
+				errmsg(PPC_NAME ": path parent mismatch in %s, target rel %s",
+					   source, format_relnames(expected, root)),
+				errdetail("path claims rel %s; %s contents: %s",
+						  format_relnames(actual, root),
+						  source, format_pathlist(container)),
+				errhint("query: %s",
+						debug_query_string ? debug_query_string : "(null)"));
+	else
+		ereport(ppc_level,
+				errmsg(PPC_NAME ": path parent mismatch in %s, target rel %s",
+					   source, format_relnames(expected, root)),
+				errdetail("path claims rel %s",
+						  format_relnames(actual, root)),
+				errhint("query: %s",
+						debug_query_string ? debug_query_string : "(null)"));
 }
 
 
@@ -348,21 +447,10 @@ walk_path(Path *path, const char *source, List *container,
 		return;
 
 	/*
-	 * ParamPathInfo lifetime check.  path->param_info points to a
-	 * ParamPathInfo shared among parameterised paths on the same rel (the
-	 * rel's ppilist caches them).  A ParamPathInfo freed while still
-	 * referenced here is the same class of bug we are hunting for Paths,
-	 * so sanity-check its tag.
+	 * Dive into path tree. It is necessary (most of the time redundant) step
+	 * that we need to pass because single operation, represented by specific
+	 * RelOptInfo might be implemented by a complex path tree.
 	 */
-	if (path->param_info != NULL &&
-		!IsA(path->param_info, ParamPathInfo))
-		ereport(ppc_level,
-				errmsg(PPC_NAME ": invalid ParamPathInfo tag %s via %s.param_info, rel %s",
-					   tag_name((int) nodeTag(path->param_info)), source,
-					   format_relnames(rel, root)),
-				errhint("query: %s",
-						debug_query_string ? debug_query_string : "(null)"));
-
 	switch (tag)
 	{
 		case T_Path:
