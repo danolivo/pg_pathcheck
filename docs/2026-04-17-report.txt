@@ -1,0 +1,2559 @@
+
+=== pg_pathcheck findings under pg_src ===
+Total DETAIL records: 24666
+
+11772  pathlist contents: [0] T_ProjectionPath; [1] T_SeqScan INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+ 2772  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(0) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+ 2654  pathlist contents: [0] T_ProjectionPath; [1] T_BitmapHeapScan INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+  800  pathlist contents: [0] T_HashPath; [1] T_SeqScan INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+  467  pathlist contents: [0] T_AggPath; [1] T_SeqScan INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+  154  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] T_FunctionScan INVALID
+       first seen in: pg_src/src/test/modules/test_pg_dump/tmp_check/log/001_base_main.log
+
+  114  pathlist contents: [0] T_NestPath; [1] UNDEF(-740746272) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+  108  pathlist contents: [0] T_SetOpPath; [1] T_SeqScan INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+  105  pathlist contents: [0] T_NestPath; [1] UNDEF(-767299120) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   95  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] T_SeqScan INVALID
+       first seen in: pg_src/src/test/modules/test_pg_dump/tmp_check/log/001_base_main.log
+
+   93  pathlist contents: [0] T_NestPath; [1] UNDEF(-740262720) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   93  pathlist contents: [0] T_HashPath; [1] UNDEF(-737752672) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   90  pathlist contents: [0] T_HashPath; [1] UNDEF(-767182656) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   90  pathlist contents: [0] T_HashPath; [1] T_Append INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   87  pathlist contents: [0] T_NestPath; [1] UNDEF(-766519824) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   81  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-765901224) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   68  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(-753804456) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/007_pg_dumpall_node.log
+
+   63  pathlist contents: [0] T_HashPath; [1] UNDEF(-1211684176) INVALID
+       first seen in: pg_src/contrib/postgres_fdw/regression.diffs
+
+   54  pathlist contents: [0] T_NestPath; [1] T_Append INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   51  pathlist contents: [0] T_ProjectionPath; [1] T_NestLoop INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   48  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740031560) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   48  pathlist contents: [0] T_HashPath; [1] UNDEF(-739424896) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   45  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740173192) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   44  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-752164088) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/007_pg_dumpall_node.log
+
+   42  pathlist contents: [0] T_NestPath; [1] T_SeqScan INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   39  pathlist contents: [0] T_HashPath; [1] UNDEF(-765951808) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   38  pathlist contents: [0] T_HashPath; [1] T_HashJoin INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   36  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740164376) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   36  pathlist contents: [0] T_ProjectionPath; [1] T_SubPlan INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   36  pathlist contents: [0] T_AppendPath; [1] T_HashPath; [2] T_SeqScan INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   34  pathlist contents: [0] T_AggPath; [1] T_FunctionScan INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   33  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766890072) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   33  pathlist contents: [0] T_HashPath; [1] UNDEF(-766670640) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   33  pathlist contents: [0] T_HashPath; [1] UNDEF(-766290560) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   33  pathlist contents: [0] T_HashPath; [1] UNDEF(-740171088) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   31  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-1988979760) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/002_pg_dump_main.log
+
+   30  pathlist contents: [0] T_SubqueryScanPath; [1] T_SeqScan INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   30  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767603216) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   30  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767147032) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   30  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740609576) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   30  pathlist contents: [0] T_NestPath; [1] UNDEF(-766663920) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   30  pathlist contents: [0] T_NestPath; [1] UNDEF(-740494688) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   30  pathlist contents: [0] T_HashPath; [1] UNDEF(-740785360) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   30  pathlist contents: [0] T_HashPath; [1] UNDEF(-739612112) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   27  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766577976) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   27  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740225496) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   27  pathlist contents: [0] T_NestPath; [1] UNDEF(-767016880) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   27  pathlist contents: [0] T_NestPath; [1] UNDEF(-740523328) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   26  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(-1989394584) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/002_pg_dump_main.log
+
+   24  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-741049872) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   24  pathlist contents: [0] T_NestPath; [1] UNDEF(-766961968) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   24  pathlist contents: [0] T_NestPath; [1] UNDEF(-740394848) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   24  pathlist contents: [0] T_HashPath; [1] T_IndexScan INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   24  pathlist contents: [0] T_AppendPath; [1] T_AggPath; [2] T_SeqScan INVALID; [3] T_AggPath
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   23  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-1986680088) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/002_pg_dump_main.log
+
+   22  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-733359728) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/log/002_pg_upgrade_old_node.log
+
+   21  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767648488) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   21  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-764320632) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   21  pathlist contents: [0] T_NestPath; [1] UNDEF(-740703040) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   21  pathlist contents: [0] T_HashPath; [1] UNDEF(-767196304) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   21  pathlist contents: [0] T_HashPath; [1] UNDEF(-767066176) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   21  pathlist contents: [0] T_HashPath; [1] UNDEF(-766989920) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   21  pathlist contents: [0] T_HashPath; [1] UNDEF(-740901328) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   21  pathlist contents: [0] T_ForeignPath; [1] UNDEF(0) INVALID
+       first seen in: pg_src/contrib/postgres_fdw/regression.diffs
+
+   20  pathlist contents: [0] T_AggPath; [1] UNDEF(-1216179448) INVALID
+       first seen in: pg_src/contrib/postgres_fdw/log/postmaster.log
+
+   20  pathlist contents: [0] T_AggPath; [1] UNDEF(-1215906296) INVALID
+       first seen in: pg_src/contrib/postgres_fdw/log/postmaster.log
+
+   18  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767335592) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   18  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766834888) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   18  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740016568) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   18  pathlist contents: [0] T_NestPath; [1] UNDEF(-766554864) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   18  pathlist contents: [0] T_HashPath; [1] UNDEF(-767182496) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   18  pathlist contents: [0] T_HashPath; [1] UNDEF(-766855216) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   18  pathlist contents: [0] T_HashPath; [1] UNDEF(-740821072) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   18  pathlist contents: [0] T_HashPath; [1] UNDEF(-740307632) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   18  pathlist contents: [0] T_HashPath; [1] UNDEF(-739984528) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   18  pathlist contents: [0] T_HashPath; [1] UNDEF(-737752512) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   18  pathlist contents: [0] T_ForeignPath; [1] T_TableFuncScan INVALID
+       first seen in: pg_src/contrib/postgres_fdw/regression.diffs
+
+   17  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(1221671504) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/log/002_pg_upgrade_new_node.log
+
+   16  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-752155880) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/007_pg_dumpall_node.log
+
+   15  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766824376) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   15  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-765934056) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   15  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740750648) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   15  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740338008) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   15  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740313960) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   15  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740290040) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   15  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(1423035160) INVALID
+       first seen in: pg_src/src/test/modules/test_pg_dump/tmp_check/log/001_base_main.log
+
+   15  pathlist contents: [0] T_NestPath; [1] UNDEF(-766710544) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   15  pathlist contents: [0] T_NestPath; [1] UNDEF(-740042064) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   15  pathlist contents: [0] T_NestPath; [1] UNDEF(-739981296) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   15  pathlist contents: [0] T_HashPath; [1] UNDEF(-767266400) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   15  pathlist contents: [0] T_HashPath; [1] UNDEF(-767037760) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   15  pathlist contents: [0] T_HashPath; [1] UNDEF(-766874736) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   15  pathlist contents: [0] T_HashPath; [1] UNDEF(-766664480) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   15  pathlist contents: [0] T_HashPath; [1] UNDEF(-766647600) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   15  pathlist contents: [0] T_HashPath; [1] UNDEF(-741080528) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   15  pathlist contents: [0] T_HashPath; [1] UNDEF(-740824416) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   15  pathlist contents: [0] T_HashPath; [1] UNDEF(-740736768) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   14  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(1425109688) INVALID
+       first seen in: pg_src/src/test/modules/test_pg_dump/tmp_check/log/001_base_main.log
+
+   12  pathlist contents: [0] T_UniquePath; [1] T_SeqScan INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   12  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767486600) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   12  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767465544) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   12  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767303992) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   12  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767196792) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   12  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766964808) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   12  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-765978728) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   12  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740933256) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   12  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740189608) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   12  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-739446680) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   12  pathlist contents: [0] T_ProjectionPath; [1] T_SeqScan INVALID; [2] T_SortPath
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   12  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(-1989158056) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/002_pg_dump_main.log
+
+   12  pathlist contents: [0] T_NestPath; [1] UNDEF(-765980512) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   12  pathlist contents: [0] T_HashPath; [1] UNDEF(-767376720) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   12  pathlist contents: [0] T_HashPath; [1] UNDEF(-767337072) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   12  pathlist contents: [0] T_HashPath; [1] UNDEF(-767266320) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   12  pathlist contents: [0] T_HashPath; [1] UNDEF(-767032256) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   12  pathlist contents: [0] T_HashPath; [1] UNDEF(-766748848) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   12  pathlist contents: [0] T_HashPath; [1] UNDEF(-766456864) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+   12  pathlist contents: [0] T_HashPath; [1] UNDEF(-741862688) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   12  pathlist contents: [0] T_HashPath; [1] UNDEF(-740968864) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   12  pathlist contents: [0] T_HashPath; [1] UNDEF(-740722336) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   12  pathlist contents: [0] T_HashPath; [1] UNDEF(-740225024) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   12  pathlist contents: [0] T_HashPath; [1] UNDEF(-739995216) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   12  pathlist contents: [0] T_HashPath; [1] T_SeqScan INVALID; [2] T_SortPath
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   12  pathlist contents: [0] T_HashPath; [1] T_HashPath; [2] T_IndexScan INVALID; [3] T_NestPath; [4] T_NestPath; [5] T_MergePath
+       first seen in: pg_src/contrib/postgres_fdw/log/postmaster.log
+
+   12  pathlist contents: [0] T_GatherPath; [1] T_Path; [2] T_SeqScan INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   12  pathlist contents: [0] T_AppendPath; [1] T_SeqScan INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+   10  pathlist contents: [0] T_HashPath; [1] T_Agg INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    9  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(1338644968) INVALID
+       first seen in: pg_src/contrib/test_decoding/regression.diffs
+
+    9  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(1221663296) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/log/002_pg_upgrade_new_node.log
+
+    9  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767304440) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    9  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767175208) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    9  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767131624) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    9  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766862728) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    9  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766858968) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    9  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766841064) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    9  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766690984) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    9  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766664440) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    9  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766497864) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    9  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-741049376) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    9  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740933608) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    9  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740676808) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    9  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740640568) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    9  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740596056) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    9  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740468568) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    9  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740374632) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    9  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740297080) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    9  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740153416) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    9  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740150616) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    9  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740136856) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    9  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740125096) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    9  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740022744) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    9  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-739954824) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    9  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-1010429144) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/006_pg_dump_compress_main.log
+
+    9  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(-1012077720) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/006_pg_dump_compress_main.log
+
+    9  pathlist contents: [0] T_NestPath; [1] UNDEF(1338990768) INVALID
+       first seen in: pg_src/contrib/test_decoding/regression.diffs
+
+    9  pathlist contents: [0] T_NestPath; [1] UNDEF(-767299040) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    9  pathlist contents: [0] T_NestPath; [1] UNDEF(-766818112) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    9  pathlist contents: [0] T_NestPath; [1] UNDEF(-766561712) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    9  pathlist contents: [0] T_NestPath; [1] UNDEF(-741021088) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    9  pathlist contents: [0] T_NestPath; [1] UNDEF(-740709888) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    9  pathlist contents: [0] T_NestPath; [1] UNDEF(-740267600) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    9  pathlist contents: [0] T_HashPath; [1] UNDEF(-767387968) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    9  pathlist contents: [0] T_HashPath; [1] UNDEF(-767196224) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    9  pathlist contents: [0] T_HashPath; [1] UNDEF(-767110464) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    9  pathlist contents: [0] T_HashPath; [1] UNDEF(-766730336) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    9  pathlist contents: [0] T_HashPath; [1] UNDEF(-766615168) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    9  pathlist contents: [0] T_HashPath; [1] UNDEF(-766545232) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    9  pathlist contents: [0] T_HashPath; [1] UNDEF(-766516032) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    9  pathlist contents: [0] T_HashPath; [1] UNDEF(-766250368) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    9  pathlist contents: [0] T_HashPath; [1] UNDEF(-766250288) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    9  pathlist contents: [0] T_HashPath; [1] UNDEF(-766149040) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    9  pathlist contents: [0] T_HashPath; [1] UNDEF(-766066416) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    9  pathlist contents: [0] T_HashPath; [1] UNDEF(-765702896) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    9  pathlist contents: [0] T_HashPath; [1] UNDEF(-740964096) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    9  pathlist contents: [0] T_HashPath; [1] UNDEF(-740830192) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    9  pathlist contents: [0] T_HashPath; [1] UNDEF(-740616944) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    9  pathlist contents: [0] T_HashPath; [1] UNDEF(-740504576) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    9  pathlist contents: [0] T_HashPath; [1] UNDEF(-740475728) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    9  pathlist contents: [0] T_HashPath; [1] UNDEF(-740349152) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    9  pathlist contents: [0] T_HashPath; [1] UNDEF(-739984688) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    9  pathlist contents: [0] T_HashPath; [1] UNDEF(-739972992) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    9  pathlist contents: [0] T_HashPath; [1] UNDEF(-739537616) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    8  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-752164712) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/007_pg_dumpall_node.log
+
+    8  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-1988771400) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/002_pg_dump_main.log
+
+    8  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(-753103336) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/007_pg_dumpall_node.log
+
+    8  pathlist contents: [0] T_HashPath; [1] UNDEF(-1216000656) INVALID
+       first seen in: pg_src/contrib/postgres_fdw/log/postmaster.log
+
+    6  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(694873864) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/005_pg_dump_filterfile_main.log
+
+    6  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(2608) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767604888) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767602720) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767595608) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767346712) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767159800) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767094872) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767057160) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766885960) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766860424) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766676488) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766584008) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766527064) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766365224) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766264984) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-76***7400) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-765680616) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-741095144) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-741059752) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-741048688) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740865656) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740832872) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740751096) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740722616) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740623096) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740585784) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740482664) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740420184) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740407416) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740363768) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740363752) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740323160) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740313496) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-739345352) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-739153704) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(693225288) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/005_pg_dump_filterfile_main.log
+
+    6  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(-1989155736) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/002_pg_dump_main.log
+
+    6  pathlist contents: [0] T_NestPath; [1] UNDEF(-767717792) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_NestPath; [1] UNDEF(-767599936) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_NestPath; [1] UNDEF(-767599856) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_NestPath; [1] UNDEF(-767573392) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_NestPath; [1] UNDEF(-767201552) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_NestPath; [1] UNDEF(-767172816) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_NestPath; [1] UNDEF(-767149360) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_NestPath; [1] UNDEF(-767142512) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_NestPath; [1] UNDEF(-767028768) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_NestPath; [1] UNDEF(-766992528) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_NestPath; [1] UNDEF(-766944832) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_NestPath; [1] UNDEF(-766519744) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_NestPath; [1] UNDEF(-762567824) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_NestPath; [1] UNDEF(-741110112) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_NestPath; [1] UNDEF(-740530176) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_NestPath; [1] UNDEF(-740521072) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_NestPath; [1] UNDEF(-740494608) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_NestPath; [1] UNDEF(-740456960) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_NestPath; [1] UNDEF(-740394768) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_NestPath; [1] UNDEF(-740309888) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_NestPath; [1] UNDEF(-740101040) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_NestPath; [1] UNDEF(-740037968) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_NestPath; [1] UNDEF(-740031120) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_NestPath; [1] UNDEF(-735916016) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_MergePath; [1] T_IndexOnlyScan INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_HashPath; [1] UNDEF(-767581776) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_HashPath; [1] UNDEF(-767565360) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_HashPath; [1] UNDEF(-767490160) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_HashPath; [1] UNDEF(-767393376) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_HashPath; [1] UNDEF(-767376560) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_HashPath; [1] UNDEF(-767297776) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_HashPath; [1] UNDEF(-767257440) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_HashPath; [1] UNDEF(-767228976) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_HashPath; [1] UNDEF(-767104432) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_HashPath; [1] UNDEF(-767066096) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_HashPath; [1] UNDEF(-767049088) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_HashPath; [1] UNDEF(-766893968) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_HashPath; [1] UNDEF(-766775024) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_HashPath; [1] UNDEF(-766730176) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_HashPath; [1] UNDEF(-766670528) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_HashPath; [1] UNDEF(-766670480) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_HashPath; [1] UNDEF(-766499280) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_HashPath; [1] UNDEF(-766235360) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_HashPath; [1] UNDEF(-764927344) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_HashPath; [1] UNDEF(-763937296) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    6  pathlist contents: [0] T_HashPath; [1] UNDEF(-741027184) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_HashPath; [1] UNDEF(-741014416) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_HashPath; [1] UNDEF(-741009168) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_HashPath; [1] UNDEF(-740968784) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_HashPath; [1] UNDEF(-740869760) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_HashPath; [1] UNDEF(-740785280) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_HashPath; [1] UNDEF(-740785200) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_HashPath; [1] UNDEF(-740513200) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_HashPath; [1] UNDEF(-740436688) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_HashPath; [1] UNDEF(-740362816) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_HashPath; [1] UNDEF(-740346720) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_HashPath; [1] UNDEF(-740254864) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_HashPath; [1] UNDEF(-740172272) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_HashPath; [1] UNDEF(-740170928) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_HashPath; [1] UNDEF(-739995296) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_HashPath; [1] UNDEF(-739712000) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_HashPath; [1] UNDEF(-739704080) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_HashPath; [1] UNDEF(-738406624) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_HashPath; [1] UNDEF(-738386944) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_HashPath; [1] UNDEF(-1215937704) INVALID
+       first seen in: pg_src/contrib/postgres_fdw/log/postmaster.log
+
+    6  pathlist contents: [0] T_HashPath; [1] T_Alias INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_GatherPath; [1] T_SeqScan INVALID; [2] T_AppendPath
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    6  pathlist contents: [0] T_AggPath; [1] UNDEF(-1216838256) INVALID
+       first seen in: pg_src/contrib/postgres_fdw/regression.diffs
+
+    6  pathlist contents: [0] T_AggPath; [1] T_Aggref INVALID
+       first seen in: pg_src/contrib/postgres_fdw/regression.diffs
+
+    5  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(1422892056) INVALID
+       first seen in: pg_src/src/test/modules/test_pg_dump/tmp_check/log/001_base_main.log
+
+    5  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(1423189720) INVALID
+       first seen in: pg_src/src/test/modules/test_pg_dump/tmp_check/log/001_base_main.log
+
+    4  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(1223639488) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/log/002_pg_upgrade_new_node.log
+
+    4  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-733138224) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/log/002_pg_upgrade_old_node.log
+
+    4  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-1987509480) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/002_pg_dump_main.log
+
+    4  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-1986710152) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/002_pg_dump_main.log
+
+    4  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(667653032) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/010_dump_connstr_main.log
+
+    4  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(1221740272) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/log/002_pg_upgrade_new_node.log
+
+    4  pathlist contents: [0] T_HashPath; [1] UNDEF(-1215944984) INVALID
+       first seen in: pg_src/contrib/postgres_fdw/log/postmaster.log
+
+    4  pathlist contents: [0] T_HashPath; [1] UNDEF(-1215909224) INVALID
+       first seen in: pg_src/contrib/postgres_fdw/log/postmaster.log
+
+    4  pathlist contents: [0] T_HashPath; [1] UNDEF(-1215904456) INVALID
+       first seen in: pg_src/contrib/postgres_fdw/log/postmaster.log
+
+    4  pathlist contents: [0] T_HashPath; [1] UNDEF(-1215407048) INVALID
+       first seen in: pg_src/contrib/postgres_fdw/log/postmaster.log
+
+    4  pathlist contents: [0] T_AggPath; [1] UNDEF(-1215978192) INVALID
+       first seen in: pg_src/contrib/postgres_fdw/log/postmaster.log
+
+    3  pathlist contents: [0] T_WindowAggPath; [1] UNDEF(-767526664) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_WindowAggPath; [1] UNDEF(-740973320) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_SubqueryScanPath; [1] UNDEF(-766734752) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_SubqueryScanPath; [1] UNDEF(-740226272) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(668023272) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/010_dump_connstr_main.log
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(668017160) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/010_dump_connstr_main.log
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(1338705256) INVALID
+       first seen in: pg_src/contrib/test_decoding/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(1034213336) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-927684696) INVALID
+       first seen in: pg_src/contrib/seg/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-927202520) INVALID
+       first seen in: pg_src/contrib/seg/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-768540216) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767648408) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767611312) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767604808) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767602032) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767595528) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767567016) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767566936) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767556096) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767538064) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767530368) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767486952) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767486872) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767465464) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767344936) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767326776) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767318984) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767304488) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767300040) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767268432) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767224344) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767196712) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767192680) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767177800) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767173032) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767147768) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767133096) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767118632) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767105640) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767092648) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767084808) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767084728) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767079656) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767066664) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767051608) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767048344) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767046872) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767039240) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767036552) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767026344) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767015560) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-767006744) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766992936) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766992856) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766982296) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766982216) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766964936) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766951872) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766900120) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766900040) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766873192) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766858232) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766856568) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766836496) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766814248) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766809080) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766791832) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766761272) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766758952) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766756856) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766756776) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766747400) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766743480) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766693368) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766693288) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766690824) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766689256) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766662136) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766629432) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766620616) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766601608) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766586552) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766578552) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766565208) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766564480) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766556224) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766551144) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766538856) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766518248) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766480184) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766477656) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766387464) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766365144) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-766120184) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-765684648) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-765545304) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-764314456) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-764283848) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-764149496) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-764149416) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-756781272) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-741881152) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-741306200) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-741095064) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-741059672) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-741010392) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-741010312) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-741003296) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740985760) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740975224) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740972464) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740900744) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740882056) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740881976) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740796296) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740782104) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740765608) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740761432) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740751144) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740741160) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740722536) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740718600) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740718520) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740716072) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740715088) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740714488) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740709160) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740699512) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740697368) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740689832) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740676728) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740672696) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740672392) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740659928) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740630056) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740592280) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740583064) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740570072) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740557080) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740544088) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740537432) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740537352) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740532504) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740532424) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740531096) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740528648) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740527016) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740516040) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740500984) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740482504) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740473000) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740449544) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740436568) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740421512) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740420104) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740406456) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740350984) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740350848) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740335928) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740330984) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740329896) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740325704) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740322952) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740308104) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740306008) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740290952) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740261944) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740237912) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740233432) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740230280) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740221184) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740190968) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740153256) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740139960) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740128216) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740053544) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740039760) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-740018656) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-739987608) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-739987528) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-739968984) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-739913880) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-739841352) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-739805400) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-739619896) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-739603320) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-739157736) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-738905848) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-738865688) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-737773000) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-737646264) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-731855512) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/log/002_pg_upgrade_old_node.log
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-730259528) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-654120856) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-45300672) INVALID
+       first seen in: pg_src/src/test/modules/test_extensions/regression.diffs
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-1995843368) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/log/regress_log_006_transfer_modes
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(692906600) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/005_pg_dump_filterfile_main.log
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(667655128) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/010_dump_connstr_main.log
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(-733454840) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/log/002_pg_upgrade_old_node.log
+
+    3  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(-1989006392) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/002_pg_dump_main.log
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(1338657392) INVALID
+       first seen in: pg_src/contrib/test_decoding/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-927524656) INVALID
+       first seen in: pg_src/contrib/seg/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-927517808) INVALID
+       first seen in: pg_src/contrib/seg/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-822272016) INVALID
+       first seen in: pg_src/contrib/earthdistance/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-767612512) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-767599248) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-767588000) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-767573472) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-767489792) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-767475632) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-767453680) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-767432112) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-767326216) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-767292112) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-767279216) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-767231264) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-767016800) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-766972992) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-766968816) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-766937984) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-766936264) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-766935664) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-766888176) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-766884192) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-766881328) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-766732336) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-766720304) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-766714848) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-765931360) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-765903864) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-762574832) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-756828992) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-741054112) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-741054032) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-741037696) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-741037616) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-741026376) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-741001968) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-740973120) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-740922560) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-740900336) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-740848928) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-740826464) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-740807144) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-740785968) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-740739264) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-740634288) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-740602880) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-740602800) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-740508680) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-740508080) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-740386880) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-740381264) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-740284352) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-740277504) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-740175832) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-740167008) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-740094192) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-735923024) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-730307248) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-1617866080) INVALID
+       first seen in: pg_src/contrib/btree_gist/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] UNDEF(-1617841472) INVALID
+       first seen in: pg_src/contrib/btree_gist/regression.diffs
+
+    3  pathlist contents: [0] T_NestPath; [1] T_ForeignScan INVALID
+       first seen in: pg_src/contrib/file_fdw/regression.diffs
+
+    3  pathlist contents: [0] T_MergePath; [1] UNDEF(263272696) INVALID
+       first seen in: pg_src/src/test/modules/unsafe_tests/regression.diffs
+
+    3  pathlist contents: [0] T_MergePath; [1] UNDEF(263261432) INVALID
+       first seen in: pg_src/src/test/modules/unsafe_tests/regression.diffs
+
+    3  pathlist contents: [0] T_MergePath; [1] UNDEF(-767464264) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_MergePath; [1] UNDEF(-740853512) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(263324512) INVALID
+       first seen in: pg_src/src/test/modules/unsafe_tests/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(263324160) INVALID
+       first seen in: pg_src/src/test/modules/unsafe_tests/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-767637432) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-767618880) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-767605768) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-767517152) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-767517072) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-767502152) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-767497040) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-767472176) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-767418216) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-767355184) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-767344176) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-767278272) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-767257216) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-767192120) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-767182576) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-767076160) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-767070528) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-767055952) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-767038704) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-767013408) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-766994448) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-766978320) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-766971056) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-766959984) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-766917008) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-766916400) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-766911128) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-766906064) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-766887232) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-766829920) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-766791872) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-766737872) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-766711648) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-766703360) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-766620032) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-766572288) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-766572208) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-766569392) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-766555392) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-766547216) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-766522624) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-766503632) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-766489808) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-766468160) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-766404656) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-766275736) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-766250208) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-766082816) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-766021440) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-766004272) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-76***9968) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-765702736) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-765631968) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-764943888) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-764943808) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-764777568) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-741134968) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-741084088) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-741061688) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-741009088) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-741003504) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-741003344) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740998488) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740994808) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740973584) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740965760) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740960608) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740949848) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740944736) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740944360) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740901248) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740901104) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740878000) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740851040) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740850960) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740845936) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740834448) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740736144) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740736064) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740701536) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740669760) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740659504) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740596448) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740571168) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740541152) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740522816) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740520880) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740512976) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740504320) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740489424) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740488816) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740435184) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740426200) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740408816) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740403616) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740402304) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740379216) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740303920) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740268368) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740206960) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740187488) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740182832) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740180480) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740157232) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740143024) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740142944) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740142560) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740096496) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-740032032) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-739766400) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-739753152) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-739711920) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-739704160) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-739703936) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-739699808) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-739554016) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-739514640) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-739489392) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-739450080) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-739359840) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-739175824) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-739039504) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-738951440) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_HashPath; [1] UNDEF(-738068736) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_ForeignPath; [1] UNDEF(-1215348664) INVALID
+       first seen in: pg_src/contrib/postgres_fdw/regression.diffs
+
+    3  pathlist contents: [0] T_AggPath; [1] UNDEF(-767799664) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_AggPath; [1] UNDEF(-767799584) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_AggPath; [1] UNDEF(-767794904) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_AggPath; [1] UNDEF(-767645640) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_AggPath; [1] UNDEF(-767597360) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_AggPath; [1] UNDEF(-767208840) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_AggPath; [1] UNDEF(-766592552) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_AggPath; [1] UNDEF(-766583512) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/regression.diffs
+
+    3  pathlist contents: [0] T_AggPath; [1] UNDEF(-741249440) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_AggPath; [1] UNDEF(-741249360) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_AggPath; [1] UNDEF(-741244680) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_AggPath; [1] UNDEF(-741095416) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_AggPath; [1] UNDEF(-741043736) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_AggPath; [1] UNDEF(-740688312) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_AggPath; [1] UNDEF(-740077944) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_AggPath; [1] UNDEF(-740068904) INVALID
+       first seen in: pg_src/src/test/regress/regression.diffs
+
+    3  pathlist contents: [0] T_AggPath; [1] UNDEF(-1216835904) INVALID
+       first seen in: pg_src/contrib/postgres_fdw/regression.diffs
+
+    3  pathlist contents: [0] T_AggPath; [1] T_TableFuncScan INVALID
+       first seen in: pg_src/contrib/postgres_fdw/regression.diffs
+
+    2  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(695284488) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/005_pg_dump_filterfile_main.log
+
+    2  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(694866456) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/005_pg_dump_filterfile_main.log
+
+    2  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(694858536) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/005_pg_dump_filterfile_main.log
+
+    2  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(693153608) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/005_pg_dump_filterfile_main.log
+
+    2  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(693018152) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/005_pg_dump_filterfile_main.log
+
+    2  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(1423026136) INVALID
+       first seen in: pg_src/src/test/modules/test_pg_dump/tmp_check/log/001_base_main.log
+
+    2  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-752147960) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/007_pg_dumpall_node.log
+
+    2  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-1989401904) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/002_pg_dump_main.log
+
+    2  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-1989006096) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/002_pg_dump_main.log
+
+    2  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-1988861168) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/002_pg_dump_main.log
+
+    2  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-1987501560) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/002_pg_dump_main.log
+
+    2  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-1986752328) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/002_pg_dump_main.log
+
+    2  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-1986700936) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/002_pg_dump_main.log
+
+    2  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-1215149496) INVALID
+       first seen in: pg_src/contrib/postgres_fdw/log/postmaster.log
+
+    2  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-1047019928) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/004_pg_dump_parallel_main.log
+
+    2  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-1014473704) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/log/regress_log_006_transfer_modes
+
+    2  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(693926664) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/005_pg_dump_filterfile_main.log
+
+    2  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(693911464) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/005_pg_dump_filterfile_main.log
+
+    2  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(693360360) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/005_pg_dump_filterfile_main.log
+
+    2  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(693217880) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/005_pg_dump_filterfile_main.log
+
+    2  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(693210104) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/005_pg_dump_filterfile_main.log
+
+    2  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(693209960) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/005_pg_dump_filterfile_main.log
+
+    2  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(1423208888) INVALID
+       first seen in: pg_src/src/test/modules/test_pg_dump/tmp_check/log/001_base_main.log
+
+    2  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(-753796536) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/007_pg_dumpall_node.log
+
+    2  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(-1989150136) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/002_pg_dump_main.log
+
+    2  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(-1989140328) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/002_pg_dump_main.log
+
+    2  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(-1988244056) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/002_pg_dump_main.log
+
+    2  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(-1216046280) INVALID; [3] T_ProjectionPath; [4] T_ProjectionPath; [5] T_ProjectionPath
+       first seen in: pg_src/contrib/postgres_fdw/log/postmaster.log
+
+    2  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(-1047983256) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/004_pg_dump_parallel_main.log
+
+    2  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(-1047281736) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/004_pg_dump_parallel_main.log
+
+    2  pathlist contents: [0] T_HashPath; [1] UNDEF(-1216050696) INVALID
+       first seen in: pg_src/contrib/postgres_fdw/log/postmaster.log
+
+    2  pathlist contents: [0] T_HashPath; [1] UNDEF(-1215994608) INVALID
+       first seen in: pg_src/contrib/postgres_fdw/log/postmaster.log
+
+    2  pathlist contents: [0] T_HashPath; [1] UNDEF(-1215929000) INVALID
+       first seen in: pg_src/contrib/postgres_fdw/log/postmaster.log
+
+    2  pathlist contents: [0] T_HashPath; [1] UNDEF(-1215917448) INVALID
+       first seen in: pg_src/contrib/postgres_fdw/log/postmaster.log
+
+    2  pathlist contents: [0] T_HashPath; [1] UNDEF(-1215907464) INVALID
+       first seen in: pg_src/contrib/postgres_fdw/log/postmaster.log
+
+    2  pathlist contents: [0] T_HashPath; [1] UNDEF(-1215847432) INVALID
+       first seen in: pg_src/contrib/postgres_fdw/log/postmaster.log
+
+    2  pathlist contents: [0] T_HashPath; [1] UNDEF(-1215830520) INVALID
+       first seen in: pg_src/contrib/postgres_fdw/log/postmaster.log
+
+    2  pathlist contents: [0] T_HashPath; [1] UNDEF(-1215753800) INVALID
+       first seen in: pg_src/contrib/postgres_fdw/log/postmaster.log
+
+    2  pathlist contents: [0] T_HashPath; [1] UNDEF(-1215752264) INVALID
+       first seen in: pg_src/contrib/postgres_fdw/log/postmaster.log
+
+    2  pathlist contents: [0] T_HashPath; [1] UNDEF(-1215704136) INVALID
+       first seen in: pg_src/contrib/postgres_fdw/log/postmaster.log
+
+    2  pathlist contents: [0] T_HashPath; [1] UNDEF(-1215498104) INVALID
+       first seen in: pg_src/contrib/postgres_fdw/log/postmaster.log
+
+    2  pathlist contents: [0] T_HashPath; [1] UNDEF(-1215458456) INVALID
+       first seen in: pg_src/contrib/postgres_fdw/log/postmaster.log
+
+    2  pathlist contents: [0] T_HashPath; [1] UNDEF(-1215456920) INVALID
+       first seen in: pg_src/contrib/postgres_fdw/log/postmaster.log
+
+    2  pathlist contents: [0] T_AggPath; [1] UNDEF(-1216122616) INVALID
+       first seen in: pg_src/contrib/postgres_fdw/log/postmaster.log
+
+    2  pathlist contents: [0] T_AggPath; [1] UNDEF(-1216035552) INVALID
+       first seen in: pg_src/contrib/postgres_fdw/log/postmaster.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(694915304) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/005_pg_dump_filterfile_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(694876888) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/005_pg_dump_filterfile_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(694865496) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/005_pg_dump_filterfile_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(694860616) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/005_pg_dump_filterfile_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(693026360) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/005_pg_dump_filterfile_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(668047896) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/010_dump_connstr_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(1857331784) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/log/regress_log_006_transfer_modes
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(1425275824) INVALID
+       first seen in: pg_src/src/test/modules/test_pg_dump/tmp_check/log/001_base_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(1425119976) INVALID
+       first seen in: pg_src/src/test/modules/test_pg_dump/tmp_check/log/001_base_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(1425116808) INVALID
+       first seen in: pg_src/src/test/modules/test_pg_dump/tmp_check/log/001_base_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(1424738520) INVALID
+       first seen in: pg_src/src/test/modules/test_pg_dump/tmp_check/log/001_base_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(1224235168) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/log/002_pg_upgrade_new_node.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(1223632096) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/log/002_pg_upgrade_new_node.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(1222231608) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/log/002_pg_upgrade_new_node.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(1221672128) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/log/002_pg_upgrade_new_node.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(1221671408) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/log/002_pg_upgrade_new_node.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-895041608) INVALID
+       first seen in: pg_src/src/bin/pg_combinebackup/tmp_check/log/002_compare_backups_pitr2.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-893138712) INVALID
+       first seen in: pg_src/src/bin/pg_combinebackup/tmp_check/log/002_compare_backups_pitr2.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-893135864) INVALID
+       first seen in: pg_src/src/bin/pg_combinebackup/tmp_check/log/002_compare_backups_pitr2.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-752162632) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/007_pg_dumpall_node.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-733138320) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/log/002_pg_upgrade_old_node.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-733137600) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/log/002_pg_upgrade_old_node.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-733057240) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/log/002_pg_upgrade_old_node.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-731883624) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/log/002_pg_upgrade_old_node.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-731854920) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/log/002_pg_upgrade_old_node.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-731841464) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/log/002_pg_upgrade_old_node.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-676303032) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/003_pg_dump_with_server_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-675040280) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/003_pg_dump_with_server_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-624590920) INVALID
+       first seen in: pg_src/src/bin/pg_combinebackup/tmp_check/log/002_compare_backups_pitr1.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-622688024) INVALID
+       first seen in: pg_src/src/bin/pg_combinebackup/tmp_check/log/002_compare_backups_pitr1.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-622685176) INVALID
+       first seen in: pg_src/src/bin/pg_combinebackup/tmp_check/log/002_compare_backups_pitr1.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-1995842760) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/log/regress_log_006_transfer_modes
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-1988905856) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/002_pg_dump_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-1988805496) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/002_pg_dump_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-1988103776) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/002_pg_dump_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-1987511528) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/002_pg_dump_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-1986743880) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/002_pg_dump_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-1986741272) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/002_pg_dump_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-1986733944) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/002_pg_dump_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-1986730952) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/002_pg_dump_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-1986712920) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/002_pg_dump_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-1986698360) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/002_pg_dump_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-1986671880) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/002_pg_dump_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-1986670632) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/002_pg_dump_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-1986659688) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/002_pg_dump_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-1986648920) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/002_pg_dump_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-1354149528) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/log/regress_log_006_transfer_modes
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] UNDEF(-1010427064) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/006_pg_dump_compress_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(693951512) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/005_pg_dump_filterfile_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(693951128) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/005_pg_dump_filterfile_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(693913544) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/005_pg_dump_filterfile_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(693592440) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/005_pg_dump_filterfile_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(693274936) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/005_pg_dump_filterfile_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(693028312) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/005_pg_dump_filterfile_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(693028056) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/005_pg_dump_filterfile_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(1423738744) INVALID
+       first seen in: pg_src/src/test/modules/test_pg_dump/tmp_check/log/001_base_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(1423082360) INVALID
+       first seen in: pg_src/src/test/modules/test_pg_dump/tmp_check/log/001_base_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(1423050488) INVALID
+       first seen in: pg_src/src/test/modules/test_pg_dump/tmp_check/log/001_base_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(1423037240) INVALID
+       first seen in: pg_src/src/test/modules/test_pg_dump/tmp_check/log/001_base_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(1224169248) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/log/002_pg_upgrade_new_node.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(1221964400) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/log/002_pg_upgrade_new_node.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(-894770872) INVALID
+       first seen in: pg_src/src/bin/pg_combinebackup/tmp_check/log/002_compare_backups_pitr2.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(-894768024) INVALID
+       first seen in: pg_src/src/bin/pg_combinebackup/tmp_check/log/002_compare_backups_pitr2.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(-894767192) INVALID
+       first seen in: pg_src/src/bin/pg_combinebackup/tmp_check/log/002_compare_backups_pitr2.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(-894065672) INVALID
+       first seen in: pg_src/src/bin/pg_combinebackup/tmp_check/log/002_compare_backups_pitr2.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(-753802376) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/007_pg_dumpall_node.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(-753101256) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/007_pg_dumpall_node.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(-733677728) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/log/002_pg_upgrade_old_node.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(-733495288) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/log/002_pg_upgrade_old_node.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(-733457208) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/log/002_pg_upgrade_old_node.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(-676684808) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/003_pg_dump_with_server_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(-676681480) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/003_pg_dump_with_server_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(-624320184) INVALID
+       first seen in: pg_src/src/bin/pg_combinebackup/tmp_check/log/002_compare_backups_pitr1.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(-624317336) INVALID
+       first seen in: pg_src/src/bin/pg_combinebackup/tmp_check/log/002_compare_backups_pitr1.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(-624316504) INVALID
+       first seen in: pg_src/src/bin/pg_combinebackup/tmp_check/log/002_compare_backups_pitr1.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(-623614984) INVALID
+       first seen in: pg_src/src/bin/pg_combinebackup/tmp_check/log/002_compare_backups_pitr1.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(-1989460152) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/002_pg_dump_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(-1989306120) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/002_pg_dump_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(-1989151896) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/002_pg_dump_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(-1989007368) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/002_pg_dump_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(-1988978216) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/002_pg_dump_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(-1988372040) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/002_pg_dump_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(-1988238424) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/002_pg_dump_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(-1988238408) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/002_pg_dump_main.log
+
+    1  pathlist contents: [0] T_ProjectionPath; [1] T_ProjectionPath; [2] UNDEF(-1012075640) INVALID
+       first seen in: pg_src/src/bin/pg_dump/tmp_check/log/006_pg_dump_compress_main.log
+
+    1  pathlist contents: [0] T_HashPath; [1] UNDEF(-767430000) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/log/002_pg_upgrade_old_node.log
+
+    1  pathlist contents: [0] T_HashPath; [1] UNDEF(-767158496) INVALID
+       first seen in: pg_src/src/bin/pg_upgrade/tmp_check/log/002_pg_upgrade_old_node.log
+
+    1  pathlist contents: [0] T_HashPath; [1] UNDEF(-740844464) INVALID
+       first seen in: pg_src/src/test/regress/log/postmaster.log
+
+    1  pathlist contents: [0] T_HashPath; [1] UNDEF(-740246272) INVALID
+       first seen in: pg_src/src/test/regress/log/postmaster.log
