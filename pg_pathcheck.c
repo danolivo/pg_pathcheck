@@ -26,6 +26,7 @@
 #include "miscadmin.h"
 #include "nodes/pathnodes.h"
 #include "optimizer/extendplan.h"
+#include "optimizer/paths.h"
 #include "optimizer/planner.h"
 #include "tcop/tcopprot.h"
 #include "utils/guc.h"
@@ -45,6 +46,8 @@ void		_PG_init(void);
 /* Chained upstream hooks. */
 static create_upper_paths_hook_type prev_create_upper_paths_hook = NULL;
 static planner_shutdown_hook_type prev_planner_shutdown_hook = NULL;
+static set_join_pathlist_hook_type prev_set_join_pathlist_hook = NULL;
+static set_rel_pathlist_hook_type prev_set_rel_pathlist_hook = NULL;
 
 /* Lazily resolved ID for our extension_state slot on PlannerGlobal. */
 static int	ppc_ext_id = -1;
@@ -65,6 +68,21 @@ static const struct config_enum_entry ppc_elevel_options[] = {
 };
 
 /*
+ * GUC: pg_pathcheck.stage_checks
+ *		When on, the per-stage hooks (set_rel_pathlist_hook,
+ *		set_join_pathlist_hook, and the pathlist check inside
+ *		create_upper_paths_hook) walk the affected rels' pathlists on every
+ *		firing.  Off by default: those checks multiply planner work by the
+ *		number of base/join/upper stages and are only needed when narrowing
+ *		down a bug already flagged by the end-of-planning walker.
+ *
+ *		The end-of-planning walker (planner_shutdown_hook) and the root
+ *		stashing inside create_upper_paths_hook remain active regardless of
+ *		this flag.
+ */
+static bool ppc_stage_checks = false;
+
+/*
  * Visited-pointer hash, rebuilt per top-level walk. Deduplication tool.
  * Prevents exponential blow-up when the same sub-path is reachable from
  * multiple parents (AppendPath children, cheapest_*_path aliases, etc.).
@@ -77,6 +95,17 @@ static void ppc_create_upper_paths(PlannerInfo *root, UpperRelationKind stage,
 								   void *extra);
 static void ppc_planner_shutdown(PlannerGlobal *glob, Query *parse,
 								 const char *query_string, PlannedStmt *pstmt);
+static void ppc_set_join_pathlist(PlannerInfo *root, RelOptInfo *joinrel,
+								  RelOptInfo *outerrel, RelOptInfo *innerrel,
+								  JoinType jointype, JoinPathExtraData *extra);
+static void ppc_set_rel_pathlist(PlannerInfo *root, RelOptInfo *rel,
+								 Index rti, RangeTblEntry *rte);
+static void check_rel_pathlists(RelOptInfo *rel, const char *ctx,
+								PlannerInfo *root);
+static void check_rel_pathlist(List *paths, const char *listname,
+							   RelOptInfo *rel, const char *ctx,
+							   PlannerInfo *root);
+static const char *upper_stage_name(UpperRelationKind stage);
 static void walk_planner_info(PlannerInfo *root);
 static void walk_rel(RelOptInfo *rel, PlannerInfo *root);
 static void walk_pathlist(List *paths, const char *listname,
@@ -111,6 +140,17 @@ _PG_init(void)
 							 0,
 							 NULL, NULL, NULL);
 
+	DefineCustomBoolVariable(PPC_NAME ".stage_checks",
+							 "Run per-stage pathlist checks at base-rel, "
+							 "join-rel and upper-rel hook boundaries.",
+							 "Off by default.  Turn on only to narrow down a "
+							 "finding already flagged at end of planning.",
+							 &ppc_stage_checks,
+							 false,
+							 PGC_USERSET,
+							 0,
+							 NULL, NULL, NULL);
+
 	MarkGUCPrefixReserved(PPC_NAME);
 
 	prev_create_upper_paths_hook = create_upper_paths_hook;
@@ -118,13 +158,191 @@ _PG_init(void)
 
 	prev_planner_shutdown_hook = planner_shutdown_hook;
 	planner_shutdown_hook = ppc_planner_shutdown;
+
+	prev_set_join_pathlist_hook = set_join_pathlist_hook;
+	set_join_pathlist_hook = ppc_set_join_pathlist;
+
+	prev_set_rel_pathlist_hook = set_rel_pathlist_hook;
+	set_rel_pathlist_hook = ppc_set_rel_pathlist;
+}
+
+
+/*
+ * ppc_set_join_pathlist
+ *		Early dangling-pointer check, fired immediately after a join's
+ *		pathlists have been populated.  Walks every entry of the two
+ *		sibling rels' pathlist / partial_pathlist — i.e. the full outer
+ *		and inner input-rel pathlists, not just the children referenced
+ *		by the new join paths.  Any entry with a non-Path NodeTag, or a
+ *		valid Path tag whose ->parent has drifted to another rel, is
+ *		reported at pg_pathcheck.elevel.
+ *
+ *		This narrows the detection window from end-of-planning to
+ *		end-of-this-join.  Set pg_pathcheck.elevel = 'error' to abort the
+ *		statement on the first finding and pin the guilty query.
+ */
+static void
+ppc_set_join_pathlist(PlannerInfo *root, RelOptInfo *joinrel,
+					  RelOptInfo *outerrel, RelOptInfo *innerrel,
+					  JoinType jointype, JoinPathExtraData *extra)
+{
+	if (prev_set_join_pathlist_hook)
+		(*prev_set_join_pathlist_hook) (root, joinrel, outerrel, innerrel,
+										jointype, extra);
+
+	if (!ppc_stage_checks)
+		return;
+
+	Assert(joinrel != NULL && outerrel != NULL && innerrel != NULL);
+
+	{
+		char	   *outer_ctx = psprintf("outer side of join rel %s",
+										 format_relnames(joinrel, root));
+		char	   *inner_ctx = psprintf("inner side of join rel %s",
+										 format_relnames(joinrel, root));
+
+		check_rel_pathlists(outerrel, outer_ctx, root);
+		check_rel_pathlists(innerrel, inner_ctx, root);
+	}
+}
+
+
+/*
+ * ppc_set_rel_pathlist
+ *		Fires at the end of set_rel_pathlist() for each base rel.  Uses the
+ *		same pathlist/partial_pathlist validator as the join hook — every
+ *		entry must be a live Path whose ->parent is this rel.  Detection at
+ *		this point localises a finding to a specific set_*_pathlist step.
+ */
+static void
+ppc_set_rel_pathlist(PlannerInfo *root, RelOptInfo *rel, Index rti,
+					 RangeTblEntry *rte)
+{
+	if (prev_set_rel_pathlist_hook)
+		(*prev_set_rel_pathlist_hook) (root, rel, rti, rte);
+
+	if (!ppc_stage_checks)
+		return;
+
+	Assert(rel != NULL);
+
+	check_rel_pathlists(rel, "base rel", root);
+}
+
+
+/*
+ * check_rel_pathlists
+ *		Check both pathlist and partial_pathlist of one rel.  ctx is a short
+ *		free-form string appended to every finding to describe the call site
+ *		("base rel", "outer side of join rel {a,b}", etc.) so a developer
+ *		can correlate findings with a specific planner step.
+ */
+static void
+check_rel_pathlists(RelOptInfo *rel, const char *ctx, PlannerInfo *root)
+{
+	check_rel_pathlist(rel->pathlist, "pathlist", rel, ctx, root);
+	check_rel_pathlist(rel->partial_pathlist, "partial_pathlist",
+					   rel, ctx, root);
+}
+
+
+/*
+ * check_rel_pathlist
+ *		Validate every Path pointer in one list owned by rel.  Two failure
+ *		modes:
+ *		  (a) the entry's NodeTag is not a Path-family tag — the chunk has
+ *		      been freed or overwritten (dangling pointer);
+ *		  (b) the entry carries a valid Path tag but ->parent does not
+ *		      match the owning rel — same-size-class aliasing, the slot
+ *		      has been re-claimed by a Path of a different rel.
+ */
+static void
+check_rel_pathlist(List *paths, const char *listname, RelOptInfo *rel,
+				   const char *ctx, PlannerInfo *root)
+{
+	ListCell   *lc;
+
+	foreach(lc, paths)
+	{
+		Path	   *p = (Path *) lfirst(lc);
+		NodeTag		tag;
+		int			i = foreach_current_index(lc);
+
+		if (p == NULL)
+			continue;
+
+		tag = nodeTag(p);
+		if (!is_path_tag(tag))
+		{
+			ereport(ppc_elevel,
+					errmsg(PPC_NAME ": dangling pointer at %s[%d], rel %s (%s)",
+						   listname, i,
+						   format_relnames(rel, root), ctx),
+					errdetail("invalid NodeTag %s; %s contents: %s",
+							  tag_name((int) tag), listname,
+							  format_pathlist(paths)),
+					errhint("query: %s",
+							debug_query_string ? debug_query_string : "(null)"));
+			continue;
+		}
+
+		/*
+		 * Upper rels legitimately hold paths whose ->parent is the input
+		 * rel (apply_scanjoin_target_to_paths and similar), so the
+		 * identity check only applies to base and join rels.
+		 */
+		if (!IS_UPPER_REL(rel) && p->parent != rel)
+		{
+			RelOptInfo *actual = p->parent;
+
+			ereport(ppc_elevel,
+					errmsg(PPC_NAME ": path parent mismatch at %s[%d], rel %s (%s)",
+						   listname, i,
+						   format_relnames(rel, root), ctx),
+					errdetail("path %s claims rel %s",
+							  tag_name((int) tag),
+							  (actual != NULL && IsA(actual, RelOptInfo))
+							  ? format_relnames(actual, root)
+							  : "(garbage)"),
+					errhint("query: %s",
+							debug_query_string ? debug_query_string : "(null)"));
+		}
+	}
+}
+
+
+/*
+ * upper_stage_name
+ *		Symbolic name for an UpperRelationKind value, for diagnostics.
+ */
+static const char *
+upper_stage_name(UpperRelationKind stage)
+{
+	switch (stage)
+	{
+		case UPPERREL_SETOP:			return "UPPERREL_SETOP";
+		case UPPERREL_PARTIAL_GROUP_AGG:	return "UPPERREL_PARTIAL_GROUP_AGG";
+		case UPPERREL_GROUP_AGG:		return "UPPERREL_GROUP_AGG";
+		case UPPERREL_WINDOW:			return "UPPERREL_WINDOW";
+		case UPPERREL_PARTIAL_DISTINCT:	return "UPPERREL_PARTIAL_DISTINCT";
+		case UPPERREL_DISTINCT:			return "UPPERREL_DISTINCT";
+		case UPPERREL_ORDERED:			return "UPPERREL_ORDERED";
+		case UPPERREL_FINAL:			return "UPPERREL_FINAL";
+	}
+	return "UPPERREL_?";
 }
 
 
 /*
  * ppc_create_upper_paths
- *		Capture the top-level PlannerInfo on its way through UPPERREL_FINAL.
- *		Subqueries (parent_root != NULL) are reached later via recursion.
+ *		Dual duty:
+ *		  1. Capture the top-level PlannerInfo at UPPERREL_FINAL, since the
+ *		     planner-shutdown hook is not handed the top root directly.
+ *		  2. Check the input and output rels' pathlist / partial_pathlist at
+ *		     every upper-rel stage.  This narrows detection from "end of
+ *		     planning" to "end of this upper-rel stage", so a finding at
+ *		     (say) UPPERREL_ORDERED but not at UPPERREL_WINDOW pins the bug
+ *		     to ordered-paths construction in grouping_planner.
  */
 static void
 ppc_create_upper_paths(PlannerInfo *root, UpperRelationKind stage,
@@ -135,16 +353,26 @@ ppc_create_upper_paths(PlannerInfo *root, UpperRelationKind stage,
 		(*prev_create_upper_paths_hook) (root, stage, input_rel, output_rel,
 										 extra);
 
-	if (root->parent_root != NULL || stage != UPPERREL_FINAL)
-		return;
+	/* (1) stash top root so planner_shutdown_hook can find it */
+	if (root->parent_root == NULL && stage == UPPERREL_FINAL)
+	{
+		if (ppc_ext_id < 0)
+			ppc_ext_id = GetPlannerExtensionId(PPC_NAME);
+		SetPlannerGlobalExtensionState(root->glob, ppc_ext_id, root);
+	}
 
-	/*
-	 * Top root is not presented in the 'glob' structures. So, extension
-	 * should save this pointer here for the further use.
-	 */
-	if (ppc_ext_id < 0)
-		ppc_ext_id = GetPlannerExtensionId(PPC_NAME);
-	SetPlannerGlobalExtensionState(root->glob, ppc_ext_id, root);
+	/* (2) per-stage pathlist check on input and output rels (opt-in) */
+	if (ppc_stage_checks)
+	{
+		const char *sname = upper_stage_name(stage);
+		char	   *in_ctx = psprintf("create_upper_paths input, stage %s", sname);
+		char	   *out_ctx = psprintf("create_upper_paths output, stage %s", sname);
+
+		if (input_rel != NULL)
+			check_rel_pathlists(input_rel, in_ctx, root);
+		if (output_rel != NULL)
+			check_rel_pathlists(output_rel, out_ctx, root);
+	}
 }
 
 

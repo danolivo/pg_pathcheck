@@ -70,7 +70,9 @@ TEMP_CONFIG=/tmp/ppc.conf \
 # Per-cluster logs land in ./tmp_check/log/
 ```
 
-## GUC: controlling the report elevel
+## GUCs
+
+### `pg_pathcheck.elevel` — report elevel
 
 ```sql
 SET pg_pathcheck.elevel = 'warning';  -- default, log and keep going
@@ -79,6 +81,35 @@ SET pg_pathcheck.elevel = 'panic';    -- PANIC → core dump
 ```
 
 Use `error` when you want to pin down exactly which query triggers a finding in a regression run (the test will fail with the guilty query in the error message). Use `panic` when you want a core dump for post-mortem analysis of the bad pathlist.
+
+### `pg_pathcheck.stage_checks` — per-stage tripwires
+
+```sql
+SET pg_pathcheck.stage_checks = off;  -- default
+SET pg_pathcheck.stage_checks = on;   -- walk pathlists at every hook boundary
+```
+
+By default only the end-of-planning walker runs (at `planner_shutdown_hook`). That catches corruption but tells you nothing about *when* during planning it happened.
+
+Turning `stage_checks` on adds three extra tripwires that fire during planning:
+
+| Hook | Fires at | Pins a finding to |
+|---|---|---|
+| `set_rel_pathlist_hook` | end of `set_*_pathlist()` for each base rel | base-rel path generation |
+| `set_join_pathlist_hook` | end of `populate_joinrel_with_paths()` | join-rel construction |
+| `create_upper_paths_hook` | end of each `UPPERREL_*` stage | a specific upper-rel stage (ordering, grouping, distinct, …) |
+
+Each tripwire checks every entry in the affected rel's `pathlist` / `partial_pathlist` for a valid Path NodeTag and — for base/join rels — a matching `->parent`. A finding carries a short context string (`"base rel"`, `"outer side of join rel {a,b}"`, `"create_upper_paths input, stage UPPERREL_ORDERED"`) that identifies which hook caught it.
+
+Combine with `elevel = 'error'` to halt on the first earliest-firing finding:
+
+```sql
+SET pg_pathcheck.stage_checks = on;
+SET pg_pathcheck.elevel       = 'error';
+-- re-run the suspect query; the error message names the guilty stage.
+```
+
+Leave `stage_checks` off for day-to-day coverage — every extra walk multiplies planner overhead by the number of hook firings, which can be substantial for join-heavy queries.
 
 ## Understanding the output
 
