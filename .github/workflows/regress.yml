@@ -56,9 +56,28 @@ jobs:
           key: pg-install-${{ steps.pg_head.outputs.sha }}
 
       - name: Clone PostgreSQL master
-        if: steps.cache_pg.outputs.cache-hit != 'true'
+#        if: steps.cache_pg.outputs.cache-hit != 'true'
         run: |
           git clone --depth=1 https://git.postgresql.org/git/postgresql.git pg_src
+
+      - name: Apply core fixes from fixes/*.patch
+#        if: steps.cache_pg.outputs.cache-hit != 'true'
+        run: |
+          # Patches in fixes/ are pending planner bugfixes that pg_pathcheck
+          # has found and that the regression harness would otherwise re-trip
+          # on every run.  Applying them here keeps CI signal focused on new
+          # findings, not the backlog we already know about.  Skipped on
+          # cache hits because the cached pg_src already has them applied.
+          shopt -s nullglob
+          patches=(fixes/*.patch)
+          if [ ${#patches[@]} -eq 0 ]; then
+              echo "No patches in fixes/ — skipping."
+              exit 0
+          fi
+          for p in "${patches[@]}"; do
+              echo "Applying $p"
+              git -C pg_src apply --verbose "$(pwd)/$p"
+          done
 
       - name: Graft pg_pathcheck into pg_src/contrib
         run: |
@@ -81,7 +100,7 @@ jobs:
           grep pg_pathcheck pg_src/contrib/Makefile
 
       - name: Configure PostgreSQL
-        if: steps.cache_pg.outputs.cache-hit != 'true'
+#        if: steps.cache_pg.outputs.cache-hit != 'true'
         working-directory: pg_src
         env:
           #
@@ -134,7 +153,7 @@ jobs:
             --with-uuid=e2fs
 
       - name: Build and install PostgreSQL (includes pg_pathcheck)
-        if: steps.cache_pg.outputs.cache-hit != 'true'
+#        if: steps.cache_pg.outputs.cache-hit != 'true'
         id: build_ext
         working-directory: pg_src
         run: |
@@ -142,7 +161,7 @@ jobs:
           make install -s
 
       - name: Rebuild pg_pathcheck on cache hit
-        if: steps.cache_pg.outputs.cache-hit == 'true'
+#        if: steps.cache_pg.outputs.cache-hit == 'true'
         id: build_ext_cached
         working-directory: pg_src/contrib/pg_pathcheck
         run: |
