@@ -33,6 +33,8 @@
 #include "utils/hsearch.h"
 #include "utils/memutils.h"
 
+#include "pathtags_generated.h"
+
 #define PPC_NAME	"pg_pathcheck"
 #define PPC_VERSION	"0.9"
 
@@ -644,6 +646,14 @@ walk_pathlist(List *paths, const char *listname,
  *		source names the field or list that contains this Path (for diagnostics).
  *		container, when non-NULL, is the List whose full contents are dumped
  *		in the errdetail when corruption is detected.
+ *
+ *		Layout safety net: every Path subtype dereferenced below is guarded
+ *		by a structural-hash entry in PPC_WALK_PATH_EXPECTED_HASHES further
+ *		down in this file.  If you are here because a field name no longer
+ *		compiles, *do not* paper over it by renaming the access — read the
+ *		mirror block's header comment first: the hash-mismatch diagnostic
+ *		will tell you which struct moved and why you are being forced to
+ *		look.
  */
 static void
 walk_path(Path *path, const char *source, List *container,
@@ -964,52 +974,144 @@ mark_visited(void *ptr)
 
 
 /*
+ * PPC_WALK_PATH_EXPECTED_HASHES
+ *		Single hand-maintained source of truth for the set of Path subtypes
+ *		walk_path() knows how to descend into, together with each subtype's
+ *		expected structural hash.  Drives two compile-time checks:
+ *
+ *		  - The count of entries here must equal the count in PATH_TAG_LIST
+ *			(generated from pathnodes.h).  Catches any addition or removal
+ *			of a Path subtype in core: the build fails with a message
+ *			pointing here.
+ *
+ *		  - Each entry's expected hash must equal PPC_PATH_HASH_T_<Subtype>
+ *			from pathtags_generated.h.  Catches any layout edit inside an
+ *			existing Path struct (field add/remove/rename/retype/reorder),
+ *			naming the specific subtype that drifted.
+ *
+ *		When the build breaks:
+ *
+ *		  1. If the count mismatches: a subtype was added or removed in
+ *			 pathnodes.h.  Teach walk_path() how to descend into the new
+ *			 subtype (or let it fall through if it has no sub-Paths), then
+ *			 add or remove the corresponding entry below.
+ *
+ *		  2. If a per-tag hash mismatches: the named subtype's body changed.
+ *			 Diff pathnodes.h against the version the hash was blessed
+ *			 against, audit walk_path()'s case for that subtype, and run
+ *			 `make bless-path-hashes` to refresh this list.  (The make
+ *			 target is a convenience; the audit of walk_path() is not
+ *			 automated and is mandatory.)
+ *
+ *		All concrete subtypes are listed — even the ones walk_path() treats
+ *		as leaves (T_Path, T_IndexPath, T_TidPath, T_TidRangePath,
+ *		T_GroupResultPath, T_MinMaxAggPath) — because "no sub-Paths to
+ *		descend" is itself a layout claim that can rot if core grows a new
+ *		Path * field in one of them.
+ *
+ *		Limitation: each hash covers only its subtype's own body, not the
+ *		bodies of embedded parent structs.  walk_path() reaches into
+ *		embedded parents at exactly one point -- IncrementalSortPath's
+ *		spath.subpath -- and that access is protected by the SortPath
+ *		entry below.  If future walker code dereferences a non-Path struct
+ *		embedded in a Path (e.g. ((Foo *) path)->non_path.field), layout
+ *		changes in that non-Path struct will not trip this guard and must
+ *		be handled separately.
+ *
+ *		See contrib/pg_pathcheck/README.md section "Bumping PostgreSQL"
+ *		for the end-to-end workflow.
+ */
+#define PPC_WALK_PATH_EXPECTED_HASHES(X) \
+	X(T_Path,                0x09ee69a9e5a8f23bULL) \
+	X(T_IndexPath,           0xd9eab6b3c997d515ULL) \
+	X(T_BitmapHeapPath,      0x75a7b181f72c352dULL) \
+	X(T_BitmapAndPath,       0xccc395f9829cc5eeULL) \
+	X(T_BitmapOrPath,        0xccc395f9829cc5eeULL) \
+	X(T_TidPath,             0x689cb40f04282c9cULL) \
+	X(T_TidRangePath,        0x49cc3bbec71064f4ULL) \
+	X(T_SubqueryScanPath,    0x90f989f41b57b041ULL) \
+	X(T_ForeignPath,         0xf6d2f824716c5cd8ULL) \
+	X(T_CustomPath,          0x349311c5592f0b5bULL) \
+	X(T_AppendPath,          0xb56a41497d3eb372ULL) \
+	X(T_MergeAppendPath,     0xfce0f29acc68fbbcULL) \
+	X(T_GroupResultPath,     0x84701fcd7617cc00ULL) \
+	X(T_MaterialPath,        0x90f989f41b57b041ULL) \
+	X(T_MemoizePath,         0x3dd2cdd46b1c4006ULL) \
+	X(T_GatherPath,          0x50237ef02554d33dULL) \
+	X(T_GatherMergePath,     0x5468656d4d359ad1ULL) \
+	X(T_NestPath,            0xc9d7126d080e587eULL) \
+	X(T_MergePath,           0x18d4e85c337a4499ULL) \
+	X(T_HashPath,            0x7fabf0c425c0856cULL) \
+	X(T_ProjectionPath,      0xe9172dd4d292d671ULL) \
+	X(T_ProjectSetPath,      0x90f989f41b57b041ULL) \
+	X(T_SortPath,            0x90f989f41b57b041ULL) \
+	X(T_IncrementalSortPath, 0x4c69aafa5f126723ULL) \
+	X(T_GroupPath,           0xd3ffe008ac1ac2fcULL) \
+	X(T_UniquePath,          0x5654a3410d707ef9ULL) \
+	X(T_AggPath,             0x179cb625db854a97ULL) \
+	X(T_GroupingSetsPath,    0x62c65256f41bdcb6ULL) \
+	X(T_MinMaxAggPath,       0xda76e318ee433a2fULL) \
+	X(T_WindowAggPath,       0xccabff582235b106ULL) \
+	X(T_SetOpPath,           0xd849dc901753a051ULL) \
+	X(T_RecursiveUnionPath,  0x46f3b9fc9f2321f6ULL) \
+	X(T_LockRowsPath,        0x094815119f154b2dULL) \
+	X(T_ModifyTablePath,     0x1ea4932e8ac9b889ULL) \
+	X(T_LimitPath,           0x4fd0995222ca414eULL)
+
+/*
+ * Count-parity check: the number of subtypes we expect walk_path() to
+ * handle must equal the number actually present in PATH_TAG_LIST.  This
+ * is what catches additions and removals in core; the per-tag hash
+ * asserts below catch layout changes on existing subtypes.
+ */
+#define PPC_COUNT_ONE_ARG(t)			+ 1
+#define PPC_COUNT_TWO_ARG(t, expected)	+ 1
+
+StaticAssertDecl((0 PATH_TAG_LIST(PPC_COUNT_ONE_ARG)) ==
+				 (0 PPC_WALK_PATH_EXPECTED_HASHES(PPC_COUNT_TWO_ARG)),
+				 "pg_pathcheck: number of Path subtypes in pathnodes.h "
+				 "no longer matches the set handled by walk_path(); add "
+				 "or remove entries in PPC_WALK_PATH_EXPECTED_HASHES "
+				 "and teach walk_path() about the change.");
+
+#undef PPC_COUNT_ONE_ARG
+#undef PPC_COUNT_TWO_ARG
+
+/*
+ * Per-subtype hash check: expand each entry into a StaticAssertDecl that
+ * compares the blessed hash against the one gen_pathtags.pl just computed.
+ * Token-paste PPC_PATH_HASH_ onto the tag to reference the generated
+ * constant; stringify the tag so the diagnostic names the exact struct.
+ */
+#define PPC_HASH_ASSERT(tag, expected)										\
+	StaticAssertDecl((expected) == PPC_PATH_HASH_##tag,						\
+					 "pg_pathcheck: struct layout for " #tag " changed in "	\
+					 "pathnodes.h; audit walk_path() and run "				\
+					 "`make bless-path-hashes` to refresh "					\
+					 "PPC_WALK_PATH_EXPECTED_HASHES.");
+
+PPC_WALK_PATH_EXPECTED_HASHES(PPC_HASH_ASSERT)
+
+#undef PPC_HASH_ASSERT
+
+/*
  * is_path_tag
- *		True if tag names a Path descendant.  Keeping this as an explicit
- *		whitelist (rather than a range test) makes freed-memory tags fall
- *		through, and forces a conscious update whenever a new Path type is
- *		added upstream.
+ *		True if tag names a Path descendant.  The case list is expanded from
+ *		PATH_TAG_LIST, which gen_pathtags.pl derives from pathnodes.h at
+ *		build time — so the whitelist cannot go stale.  Keeping it as a
+ *		switch (rather than a range test) preserves the freed-memory-tag
+ *		safety property: a random integer that happens to fall into the
+ *		numeric range of Path tags but was never minted by core still
+ *		falls through to the default arm.
  */
 static bool
 is_path_tag(NodeTag tag)
 {
 	switch (tag)
 	{
-		case T_Path:
-		case T_IndexPath:
-		case T_BitmapHeapPath:
-		case T_BitmapAndPath:
-		case T_BitmapOrPath:
-		case T_TidPath:
-		case T_TidRangePath:
-		case T_SubqueryScanPath:
-		case T_ForeignPath:
-		case T_CustomPath:
-		case T_AppendPath:
-		case T_MergeAppendPath:
-		case T_GroupResultPath:
-		case T_MaterialPath:
-		case T_MemoizePath:
-		case T_GatherPath:
-		case T_GatherMergePath:
-		case T_NestPath:
-		case T_MergePath:
-		case T_HashPath:
-		case T_ProjectionPath:
-		case T_ProjectSetPath:
-		case T_SortPath:
-		case T_IncrementalSortPath:
-		case T_GroupPath:
-		case T_UniquePath:
-		case T_AggPath:
-		case T_GroupingSetsPath:
-		case T_MinMaxAggPath:
-		case T_WindowAggPath:
-		case T_SetOpPath:
-		case T_RecursiveUnionPath:
-		case T_LockRowsPath:
-		case T_ModifyTablePath:
-		case T_LimitPath:
+#define PPC_CASE(t)		case t:
+		PATH_TAG_LIST(PPC_CASE)
+#undef PPC_CASE
 			return true;
 		default:
 			return false;

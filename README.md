@@ -171,6 +171,57 @@ If you are running pg_pathcheck against a patch you are writing or an extension 
 4. **Check your `pfree` / `list_delete_cell` pairing.** Most findings reduce to "I freed a path but did not remove it from the list" or "I kept a pointer to a path across a stage that frees it".
 5. **If the fix is in core planner code**, please share it on pgsql-hackers — this is the wider discussion pg_pathcheck is meant to feed.
 
+## Bumping PostgreSQL
+
+The walker depends on the layout of every `Path` subtype in
+`src/include/nodes/pathnodes.h`. When you pull a new PostgreSQL master and
+that header has moved, the build catches the drift before it turns into a
+runtime `Assert(false)` in `walk_path()`.
+
+There are two compile-time guards in `pg_pathcheck.c`:
+
+- **Subtype-set guard.** `PPC_WALK_PATH_EXPECTED_HASHES` must list exactly
+  the same set of concrete Path subtypes as `PATH_TAG_LIST` (generated from
+  `pathnodes.h`). If core adds or removes a subtype, a `static_assert`
+  fires naming the mismatch.
+
+- **Layout guard.** Each entry in `PPC_WALK_PATH_EXPECTED_HASHES` carries a
+  64-bit structural hash of its subtype's body (comments,
+  `pg_node_attr(...)` and redundant whitespace stripped before hashing).
+  If core edits any walked struct, a `static_assert` fires naming the
+  specific subtype.
+
+### Re-bless workflow
+
+1. Rebuild. The failing assertion tells you whether the subtype *set* or a
+   specific subtype's *layout* drifted, and which subtype.
+2. Read the commit in upstream that touched `pathnodes.h`.
+3. **Audit `walk_path()`**. For each drifted subtype, confirm that the
+   field accesses in its `case` still reach the same sub-paths. Add cases
+   for new subtypes; remove cases for deleted ones. Teach `walk_path()`
+   about any new `Path *` or path-list fields.
+4. Run `make bless-path-hashes`. This rewrites the
+   `PPC_WALK_PATH_EXPECTED_HASHES` block in `pg_pathcheck.c` with the
+   current hashes. **Do not run this without doing step 3 first** — it
+   defeats the entire guard.
+5. Rebuild. The build should be green again.
+
+### Scope and limitations
+
+- The layout hash covers only a subtype's own body. Embedded parent
+  structs (`JoinPath` inside `NestPath`, `SortPath` inside
+  `IncrementalSortPath`) are not hashed transitively; they rely on their
+  own independent hash entries. Today every parent in the chain is
+  independently guarded, so this is sound — but if future walker code
+  dereferences a non-`Path` struct embedded in a Path, that struct's
+  layout changes will *not* trip the guard and must be handled
+  separately.
+- Cosmetic edits in `pathnodes.h` (comment rewrap, `pg_node_attr`
+  annotation changes, whitespace) are filtered out of the hash, so they
+  do not force a re-bless.
+- Field reordering that preserves the field set *does* force a re-bless
+  even though the walker is typically unaffected. Accepted cost.
+
 ## Continuous coverage
 
 The repo ships a GitHub Actions workflow (`.github/workflows/regress.yml`) that runs `make -k check-world` with `pg_pathcheck` loaded on every push to `main`, on every PR, on manual dispatch, and nightly. Artefacts include the raw server logs and a summary written to the job's step-summary panel. Point your fork or extension repo at the same workflow if you would like continuous coverage against PG master as it evolves.
