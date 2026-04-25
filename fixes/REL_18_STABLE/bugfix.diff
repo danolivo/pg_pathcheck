@@ -1,0 +1,209 @@
+diff --git a/src/backend/optimizer/plan/planner.c b/src/backend/optimizer/plan/planner.c
+index 53eea5a5d35..933770d61ac 100644
+--- a/src/backend/optimizer/plan/planner.c
++++ b/src/backend/optimizer/plan/planner.c
+@@ -5345,7 +5345,31 @@ create_ordered_paths(PlannerInfo *root,
+ 												input_path->pathkeys, &presorted_keys);
+ 
+ 		if (is_sorted)
+-			sorted_path = input_path;
++		{
++			/*
++			 * The input_path is already sorted; we would like to reuse it as
++			 * the ordered rel's path.  But we must not share the pointer with
++			 * input_rel->pathlist: if a later add_path() in this loop
++			 * dominates this path and pfree()s it, input_rel's pathlist is
++			 * left holding a dangling pointer.  Wrap it in a fresh
++			 * ProjectionPath belonging to ordered_rel so add_path() is free
++			 * to dispose of it without affecting input_rel.
++			 *
++			 * If input_path is itself a ProjectionPath, strip it first and
++			 * wrap the inner subpath: create_projection_path's own nested-
++			 * ProjectionPath guard asserts subpp->parent == rel, which fails
++			 * when the inner wrapper was built for input_rel.  Stripping
++			 * here keeps the invariant "ordered_rel's ProjectionPath has
++			 * parent == ordered_rel".
++			 */
++			Path	   *wrap_target = input_path;
++
++			if (IsA(wrap_target, ProjectionPath))
++				wrap_target = ((ProjectionPath *) wrap_target)->subpath;
++
++			sorted_path = (Path *) create_projection_path(root, ordered_rel,
++														  wrap_target, target);
++		}
+ 		else
+ 		{
+ 			/*
+@@ -5377,15 +5401,18 @@ create_ordered_paths(PlannerInfo *root,
+ 																	root->sort_pathkeys,
+ 																	presorted_keys,
+ 																	limit_tuples);
+-		}
+ 
+-		/*
+-		 * If the pathtarget of the result path has different expressions from
+-		 * the target to be applied, a projection step is needed.
+-		 */
+-		if (!equal(sorted_path->pathtarget->exprs, target->exprs))
+-			sorted_path = apply_projection_to_path(root, ordered_rel,
+-												   sorted_path, target);
++			/*
++			 * If the pathtarget of the result path has different expressions
++			 * from the target to be applied, a projection step is needed.
++			 * When is_sorted is true the wrap above already carries the
++			 * ordered rel's target, so this only applies to the sorted
++			 * branch.
++			 */
++			if (!equal(sorted_path->pathtarget->exprs, target->exprs))
++				sorted_path = apply_projection_to_path(root, ordered_rel,
++													   sorted_path, target);
++		}
+ 
+ 		add_path(ordered_rel, sorted_path);
+ 	}
+diff --git a/src/test/regress/expected/limit.out b/src/test/regress/expected/limit.out
+index e3bcc680653..c12b2498f65 100644
+--- a/src/test/regress/expected/limit.out
++++ b/src/test/regress/expected/limit.out
+@@ -439,14 +439,14 @@ select currval('testseq');
+ explain (verbose, costs off)
+ select unique1, unique2, generate_series(1,10)
+   from tenk1 order by unique2 limit 7;
+-                                                                         QUERY PLAN                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
++                         QUERY PLAN                         
++------------------------------------------------------------
+  Limit
+    Output: unique1, unique2, (generate_series(1, 10))
+    ->  ProjectSet
+          Output: unique1, unique2, generate_series(1, 10)
+          ->  Index Scan using tenk1_unique2 on public.tenk1
+-               Output: unique1, unique2, two, four, ten, twenty, hundred, thousand, twothousand, fivethous, tenthous, odd, even, stringu1, stringu2, string4
++               Output: unique1, unique2
+ (6 rows)
+ 
+ select unique1, unique2, generate_series(1,10)
+diff --git a/src/test/regress/expected/select_distinct_on.out b/src/test/regress/expected/select_distinct_on.out
+index 75b1e7d300f..4ae09c8b181 100644
+--- a/src/test/regress/expected/select_distinct_on.out
++++ b/src/test/regress/expected/select_distinct_on.out
+@@ -81,12 +81,13 @@ select distinct on (1) floor(random()) as r, f1 from int4_tbl order by 1,2;
+ EXPLAIN (COSTS OFF)
+ SELECT DISTINCT ON (four) four,two
+    FROM tenk1 WHERE four = 0 ORDER BY 1;
+-         QUERY PLAN         
+-----------------------------
+- Limit
+-   ->  Seq Scan on tenk1
+-         Filter: (four = 0)
+-(3 rows)
++            QUERY PLAN            
++----------------------------------
++ Result
++   ->  Limit
++         ->  Seq Scan on tenk1
++               Filter: (four = 0)
++(4 rows)
+ 
+ -- and check the result of the above query is correct
+ SELECT DISTINCT ON (four) four,two
+@@ -114,12 +115,13 @@ SELECT DISTINCT ON (four) four,two
+ EXPLAIN (COSTS OFF)
+ SELECT DISTINCT ON (four) four,hundred
+    FROM tenk1 WHERE four = 0 ORDER BY 1,2;
+-                  QUERY PLAN                   
+------------------------------------------------
+- Limit
+-   ->  Index Scan using tenk1_hundred on tenk1
+-         Filter: (four = 0)
+-(3 rows)
++                     QUERY PLAN                      
++-----------------------------------------------------
++ Result
++   ->  Limit
++         ->  Index Scan using tenk1_hundred on tenk1
++               Filter: (four = 0)
++(4 rows)
+ 
+ --
+ -- Test the planner's ability to reorder the distinctClause Pathkeys to match
+diff --git a/src/test/regress/expected/select_parallel.out b/src/test/regress/expected/select_parallel.out
+index 0185ef661b1..f0af05606fc 100644
+--- a/src/test/regress/expected/select_parallel.out
++++ b/src/test/regress/expected/select_parallel.out
+@@ -753,20 +753,18 @@ end;
+ $$ language plpgsql PARALLEL SAFE;
+ explain (costs off, verbose)
+     select ten, sp_simple_func(ten) from tenk1 where ten < 100 order by ten;
+-                     QUERY PLAN                      
+------------------------------------------------------
++                  QUERY PLAN                   
++-----------------------------------------------
+  Gather Merge
+-   Output: ten, (sp_simple_func(ten))
++   Output: ten, sp_simple_func(ten)
+    Workers Planned: 4
+-   ->  Result
+-         Output: ten, sp_simple_func(ten)
+-         ->  Sort
++   ->  Sort
++         Output: ten
++         Sort Key: tenk1.ten
++         ->  Parallel Seq Scan on public.tenk1
+                Output: ten
+-               Sort Key: tenk1.ten
+-               ->  Parallel Seq Scan on public.tenk1
+-                     Output: ten
+-                     Filter: (tenk1.ten < 100)
+-(11 rows)
++               Filter: (tenk1.ten < 100)
++(9 rows)
+ 
+ drop function sp_simple_func(integer);
+ -- test handling of SRFs in targetlist (bug in 10.0)
+@@ -1261,18 +1259,16 @@ SELECT generate_series(1, two), array(select generate_series(1, two))
+    ->  Gather Merge
+          Output: tenk1.two, tenk1.tenthous
+          Workers Planned: 4
+-         ->  Result
+-               Output: tenk1.two, tenk1.tenthous
+-               ->  Sort
++         ->  Sort
++               Output: tenk1.tenthous, tenk1.two
++               Sort Key: tenk1.tenthous
++               ->  Parallel Seq Scan on public.tenk1
+                      Output: tenk1.tenthous, tenk1.two
+-                     Sort Key: tenk1.tenthous
+-                     ->  Parallel Seq Scan on public.tenk1
+-                           Output: tenk1.tenthous, tenk1.two
+    SubPlan 1
+      ->  ProjectSet
+            Output: generate_series(1, tenk1.two)
+            ->  Result
+-(16 rows)
++(14 rows)
+ 
+ -- must disallow pushing sort below gather when pathkey contains an SRF
+ EXPLAIN (VERBOSE, COSTS OFF)
+diff --git a/src/test/regress/expected/tsrf.out b/src/test/regress/expected/tsrf.out
+index d47b5f6ec57..a0f7d80c699 100644
+--- a/src/test/regress/expected/tsrf.out
++++ b/src/test/regress/expected/tsrf.out
+@@ -457,12 +457,12 @@ reset enable_hashagg;
+ -- case with degenerate ORDER BY
+ explain (verbose, costs off)
+ select 'foo' as f, generate_series(1,2) as g from few order by 1;
+-                  QUERY PLAN                  
+-----------------------------------------------
++                   QUERY PLAN                   
++------------------------------------------------
+  ProjectSet
+-   Output: 'foo'::text, generate_series(1, 2)
++   Output: ('foo'::text), generate_series(1, 2)
+    ->  Seq Scan on public.few
+-         Output: id, dataa, datab
++         Output: 'foo'::text
+ (4 rows)
+ 
+ select 'foo' as f, generate_series(1,2) as g from few order by 1;

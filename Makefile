@@ -9,7 +9,7 @@ PGFILEDESC = "pg_pathcheck - validate planner Path trees for freed memory"
 REGRESS = pg_pathcheck
 REGRESS_OPTS = --temp-config=$(srcdir)/pg_pathcheck.conf
 
-EXTRA_CLEAN = nodetag_names.h pathtags_generated.h pg_pathcheck-*.zip
+EXTRA_CLEAN = nodetag_names.h pathtags_generated.h pg_pathcheck-*.zip make.log
 
 ifdef USE_PGXS
 PG_CONFIG ?= pg_config

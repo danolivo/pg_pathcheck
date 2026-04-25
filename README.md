@@ -7,11 +7,22 @@
 PostgreSQL extension that validates the planner's final Path tree, detecting freed or corrupt memory by walking every reachable Path and checking NodeTags.
 Reports and analyses of findings are published on the [project wiki](https://github.com/danolivo/pg_pathcheck/wiki).
 
+## Which branch do I want?
+
+`pg_pathcheck` lives on more than one long-running Git branch. Each branch targets a different PostgreSQL release line; the **user-visible interface (name, GUCs, warning format) is identical across branches** so findings are directly comparable.
+
+| If you run                          | Check out branch                                                                  | Tracks upstream                |
+|-------------------------------------|-----------------------------------------------------------------------------------|--------------------------------|
+| PostgreSQL **17.x** or **18.x**     | [`pg17-18`](https://github.com/danolivo/pg_pathcheck/tree/pg17-18)                | `REL_17_STABLE`, `REL_18_STABLE` |
+| PostgreSQL **master / 19devel**     | [`master`](https://github.com/danolivo/pg_pathcheck/tree/master)                  | `master`                       |
+
+You are reading the `pg17-18` branch's README. The implementation diverges from `master` because the available planner hooks differ between PG versions (notably `planner_shutdown_hook` and the `extension_state` slot API are master-only). On 17/18 the walker is driven inline from `create_upper_paths_hook` at `UPPERREL_FINAL`; on master it runs in the dedicated shutdown hook after `standard_planner` returns.
+
+**Coverage caveat between branches.** Because the 17/18 walk fires before `create_plan` and `setrefs.c`, any Path-lifetime bug visible only during those later stages is caught on `master` but not on `pg17-18`. Base-, join- and upper-rel Path generation is complete by `UPPERREL_FINAL` so the bulk of the detection surface is the same on both branches.
+
 ## How it works
 
-The extension hooks `create_upper_paths_hook`, `set_rel_pathlist_hook`, and `set_join_pathlist_hook`. The end-of-planning walker fires inline at `UPPERREL_FINAL` of the top query — the latest planner-wide boundary PG 17 and 18 expose — and traverses the Path tree rooted at the top `PlannerInfo`, recursing into every subquery subroot reachable via `RelOptInfo::subroot`, every subplan subroot in `PlannerGlobal::subroots`, and every partition child in `RelOptInfo::part_rels[]`. For each visited RelOptInfo it inspects `pathlist`, `partial_pathlist`, `cheapest_parameterized_paths`, and the `cheapest_startup_path` / `cheapest_total_path` singletons. Compound Path nodes embed further Path pointers (`outerjoinpath`/`innerjoinpath`, `subpath`, `subpaths`, `bitmapqual`, ...); the walker descends into each, so a corrupt pointer one level down is still caught.
-
-The walk runs before `create_plan` and `setrefs.c` have executed, so any Path-lifetime bug visible only during those later stages is out of scope; base-, join- and upper-rel Path generation is complete by `UPPERREL_FINAL`, which covers the bulk of the detection surface.
+The extension hooks `create_upper_paths_hook`, `set_rel_pathlist_hook`, and `set_join_pathlist_hook`. The end-of-planning walker fires inline at `UPPERREL_FINAL` of the top query and traverses the Path tree rooted at the top `PlannerInfo`, recursing into every subquery subroot reachable via `RelOptInfo::subroot`, every subplan subroot in `PlannerGlobal::subroots`, and every partition child in `RelOptInfo::part_rels[]`. For each visited RelOptInfo it inspects `pathlist`, `partial_pathlist`, `cheapest_parameterized_paths`, and the `cheapest_{startup,total,unique}_path` singletons. Compound Path nodes embed further Path pointers (`outerjoinpath`/`innerjoinpath`, `subpath`, `subpaths`, `bitmapqual`, ...); the walker descends into each, including the per-aggregate access paths reachable through `MinMaxAggPath.mmaggregates`, so a corrupt pointer one level down is still caught.
 
 Two detection mechanisms run together. The first is a NodeTag whitelist: if `path->type` is not one of the known Path-family node tags, the memory has been freed (with `CLOBBER_FREED_MEMORY` the bytes read as `0x7F`) or reallocated for a node of a different class. The second is a parent-match check on base and join rels: every Path found directly on the rel's own lists must carry `path->parent == rel`. A mismatch catches same-size-class aliasing, where the freed slot has been recycled into another Path that passes the tag test — the parent pointer reveals the slot has been claimed by a different owner.
 
@@ -32,6 +43,14 @@ Standalone PGXS builds also work:
 cd /path/to/pg_pathcheck
 USE_PGXS=1 PG_CONFIG=/path/to/install/bin/pg_config make install
 ```
+
+The repository also ships a [PGXN](https://pgxn.org/)-ready `META.json`, so once a release is published on the network you will be able to install through [`pgxnclient`](https://pgxn.github.io/pgxnclient/) without cloning:
+
+```bash
+pgxn install pg_pathcheck      # picks the build matching your PostgreSQL version
+```
+
+The release tarball is `pg_pathcheck-<version>-pg17-18.zip`, produced by `make dist`; see [Versioning and releases](#versioning-and-releases) for how it is built and the choice you make at PGXN-upload time about whether the back-branch release is a separate distribution or a build-metadata-suffixed variant of the same one.
 
 There is no `CREATE EXTENSION pg_pathcheck`. It registers no SQL objects; its entire effect is through planner hooks activated at library load.
 
@@ -240,6 +259,33 @@ library automatically. The same `expected/` file passes on PG 17.9 and
 PG 18.3.
 
 A few SQL shapes are deliberately avoided in the test (`GROUP BY a + ORDER BY a`, `DISTINCT b + ORDER BY b`) because at the time of writing they trigger a real `UPPERREL_ORDERED` pathlist finding on PG 18 stable. The walker is doing what it should; the test avoids the trigger only because the corrupt-memory `UNDEF(N)` value varies by memory layout and would make the regression diff non-portable. See the comment at the top of `sql/pg_pathcheck.sql` for context.
+
+## Versioning and releases
+
+The single source of truth for the version string is `META.json`'s `"version"` field. Two derived strings must be kept in sync with it manually:
+
+| Where                                    | What                                  |
+|------------------------------------------|---------------------------------------|
+| `META.json` → `"version"`                | canonical (e.g. `"0.9.1"`)            |
+| `META.json` → `provides.pg_pathcheck.version` | mirror of the canonical          |
+| `pg_pathcheck.c` → `#define PPC_VERSION` | matches the canonical, advertised through `PG_MODULE_MAGIC_EXT.version` on PG 18+ |
+
+To cut a release on this branch:
+
+1. Edit `META.json` — bump both occurrences of `"version"`.
+2. Edit `pg_pathcheck.c` line 32 — bump `PPC_VERSION` to match.
+3. Commit. Tag if you want (e.g. `v0.9.2-pg17-18`).
+4. Run `make dist` (or `USE_PGXS=1 PG_CONFIG=... make dist`).
+
+The `dist` target produces
+
+```
+pg_pathcheck-<version>-pg17-18.zip
+```
+
+The `-pg17-18` suffix is hard-coded in the Makefile and disambiguates this branch's release from a `master` release of the same numeric version. The archive is built via `git archive --worktree-attributes` and respects `.gitattributes` `export-ignore` rules — original artwork, internal CI reports, helper scripts, and per-branch CI patches under `fixes/` are not shipped. Typical archive size is around 100 KB.
+
+For PGXN submission, decide at upload time how you want this branch's release to appear alongside the `master` branch's release of the same numeric version: either rename the distribution in `META.json` to `pg_pathcheck-pg17-18` (separate distribution on PGXN) or version-suffix it as `0.9.1+pg17-18` (same distribution, build-metadata variant). The Makefile target is agnostic to that choice.
 
 ## Disclaimer
 

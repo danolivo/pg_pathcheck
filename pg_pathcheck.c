@@ -24,12 +24,20 @@
 #include "tcop/tcopprot.h"
 #include "utils/guc.h"
 #include "utils/hsearch.h"
-#include "utils/memutils.h"
 
 #include "pathtags_generated.h"
 
 #define PPC_NAME	"pg_pathcheck"
 #define PPC_VERSION	"0.9.1"
+
+/*
+ * Common errhint() clause: every finding wants the triggering query in the
+ * report.  debug_query_string is NULL for queries that arrive through paths
+ * other than the protocol top level (function bodies, plancache, etc.), so
+ * fall back to a placeholder.  Used inside ereport() argument lists.
+ */
+#define PPC_QUERY_HINT \
+	errhint("query: %s", debug_query_string ? debug_query_string : "(null)")
 
 #if PG_VERSION_NUM >= 180000
 PG_MODULE_MAGIC_EXT(
@@ -86,14 +94,6 @@ static bool ppc_stage_checks = false;
  */
 static bool ppc_end_walk = true;
 
-/*
- * The visited-pointer HTAB is created locally in walk_top_root() and threaded
- * through the recursion as a parameter.  Keeping it off file-scope makes the
- * lifetime visible at every call site and structurally rules out re-entrance
- * surprises (e.g. nested planner() calls during outer planning); each walk
- * has its own private dedup state.
- */
-
 /* Forward declarations. */
 static void ppc_create_upper_paths(PlannerInfo *root, UpperRelationKind stage,
 								   RelOptInfo *input_rel, RelOptInfo *output_rel,
@@ -128,7 +128,7 @@ static const char *format_pathlist(List *paths);
 
 /*
  * _PG_init
- *		Chain onto the two planner hooks we need.
+ *		Register the GUCs and chain onto the planner hooks we need.
  */
 void
 _PG_init(void)
@@ -293,8 +293,7 @@ check_rel_pathlist(List *paths, const char *listname, RelOptInfo *rel,
 					errdetail("invalid NodeTag %s; %s contents: %s",
 							  tag_name((int) tag), listname,
 							  format_pathlist(paths)),
-					errhint("query: %s",
-							debug_query_string ? debug_query_string : "(null)"));
+					PPC_QUERY_HINT);
 			continue;
 		}
 
@@ -316,8 +315,7 @@ check_rel_pathlist(List *paths, const char *listname, RelOptInfo *rel,
 							  (actual != NULL && IsA(actual, RelOptInfo))
 							  ? format_relnames(actual, root)
 							  : "(garbage)"),
-					errhint("query: %s",
-							debug_query_string ? debug_query_string : "(null)"));
+					PPC_QUERY_HINT);
 		}
 	}
 }
@@ -395,6 +393,12 @@ ppc_create_upper_paths(PlannerInfo *root, UpperRelationKind stage,
  *		End-of-planning walker body.  Visits every RelOptInfo reachable from
  *		top_root, recurses into glob->subroots, and sweeps glob->subpaths for
  *		dangling pointers.
+ *
+ *		The dedup HTAB is created on the stack of this function and threaded
+ *		through the recursion as a parameter.  Keeping it off file-scope makes
+ *		the lifetime visible at every call site and structurally rules out
+ *		re-entrance surprises (nested planner() calls during outer planning);
+ *		each walk has its own private dedup state.
  */
 static void
 walk_top_root(PlannerInfo *top_root, PlannerGlobal *glob)
@@ -428,8 +432,10 @@ walk_top_root(PlannerInfo *top_root, PlannerGlobal *glob)
 		walk_planner_info(visited, root);
 
 	/*
-	 * Deliberately duplicated crawler - just to find potential
-	 * low-probability discrepancies or dangled pointers in this list itself
+	 * glob->subpaths holds the top-level Path produced for each SubPlan;
+	 * not every entry is reachable from a per-rel pathlist, so walk this
+	 * flat list directly to be sure we cover them.  mark_visited() dedups
+	 * any path already seen via the subroot recursion above.
 	 */
 	walk_pathlist(visited, glob->subpaths, "glob->subpaths", NULL, top_root);
 
@@ -439,7 +445,9 @@ walk_top_root(PlannerInfo *top_root, PlannerGlobal *glob)
 
 /*
  * walk_planner_info
- *		Visit every RelOptInfo on this root and recurse into its subroots.
+ *		Visit every RelOptInfo on this root and recurse into per-RTE
+ *		subquery PlannerInfos via RelOptInfo->subroot.  The PlannerGlobal
+ *		subroots list is walked separately by the caller (walk_top_root).
  */
 static void
 walk_planner_info(HTAB *visited, PlannerInfo *root)
@@ -597,17 +605,15 @@ verify_path_parent(Path *path, RelOptInfo *expected, const char *source,
 		return;
 
 	/*
-	 * ->parent doesn't match.  As the memory is reused it might happen we see
-	 * a sort of garbage here, so validate the pointer before dereferencing it
-	 * via IS_UPPER_REL (which reads ->reloptkind).
+	 * The mismatched ->parent may itself be freed memory; validate its
+	 * NodeTag before reading ->reloptkind via IS_UPPER_REL().
 	 */
 	if (actual == NULL || !IsA(actual, RelOptInfo))
 	{
 		ereport(ppc_elevel,
 				errmsg(PPC_NAME ": path has non-RelOptInfo parent in %s, target rel %s",
 					   source, format_relnames(expected, root)),
-				errhint("query: %s",
-						debug_query_string ? debug_query_string : "(null)"));
+				PPC_QUERY_HINT);
 		return;
 	}
 
@@ -637,8 +643,7 @@ verify_path_parent(Path *path, RelOptInfo *expected, const char *source,
 						tag_name(path->type),
 						actual->relids != NULL ? nodeToString(actual->relids) : "UPPER_REL",
 						path->rows, path->startup_cost, path->total_cost),
-			errhint("query: %s",
-					debug_query_string ? debug_query_string : "(null)"));
+			PPC_QUERY_HINT);
 }
 
 
@@ -703,19 +708,13 @@ walk_path(HTAB *visited, Path *path, const char *source, List *container,
 				? errdetail("%s contents: %s",
 							source, format_pathlist(container))
 				: 0,
-				errhint("query: %s",
-						debug_query_string ? debug_query_string : "(null)"));
+				PPC_QUERY_HINT);
 		return;
 	}
 
 	if (!mark_visited(visited, path))
 		return;
 
-	/*
-	 * Dive into path tree. It is necessary (most of the time redundant) step
-	 * that we need to pass because single operation, represented by specific
-	 * RelOptInfo might be implemented by a complex path tree.
-	 */
 	switch (tag)
 	{
 		case T_Path:

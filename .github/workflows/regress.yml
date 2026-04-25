@@ -51,25 +51,31 @@ jobs:
           echo "PG ${{ matrix.pg_branch }} HEAD: $sha"
 
       - name: Restore cached PG install
-        # Temporarily disabled: every run does a full PG build from scratch.
-        # Flip to `true` (or remove this `if`) to re-enable caching.
-        if: false
+        # Cache key components:
+        #   - pg_branch       — separate caches per matrix entry
+        #   - upstream HEAD   — invalidate when REL_17_STABLE / REL_18_STABLE
+        #                       advances (minor release, security backport, ...)
+        #   - hashFiles(...)  — invalidate when fixes/<branch>/ changes, so a
+        #                       newly-added patch doesn't get silently masked
+        #                       by a cache built without it.  hashFiles
+        #                       returns "" when the directory is absent or
+        #                       empty, which is consistent across runs.
         id: cache_pg
         uses: actions/cache@v4
         with:
           path: |
             ${{ env.PG_INSTALL }}
             pg_src
-          key: pg-install-${{ matrix.pg_branch }}-${{ steps.pg_head.outputs.sha }}
+          key: pg-install-${{ matrix.pg_branch }}-${{ steps.pg_head.outputs.sha }}-${{ hashFiles(format('fixes/{0}/**', matrix.pg_branch)) }}
 
       - name: Clone PostgreSQL ${{ matrix.pg_branch }}
-#        if: steps.cache_pg.outputs.cache-hit != 'true'
+        if: steps.cache_pg.outputs.cache-hit != 'true'
         run: |
           git clone --depth=1 --branch ${{ matrix.pg_branch }} \
             https://git.postgresql.org/git/postgresql.git pg_src
 
       - name: Apply branch-specific patches from fixes/${{ matrix.pg_branch }}/
-#        if: steps.cache_pg.outputs.cache-hit != 'true'
+        if: steps.cache_pg.outputs.cache-hit != 'true'
         run: |
           # Patches in fixes/<branch>/ are pending planner bugfixes that
           # pg_pathcheck has found and that the regression harness would
@@ -117,7 +123,7 @@ jobs:
           grep pg_pathcheck pg_src/contrib/Makefile
 
       - name: Configure PostgreSQL
-#        if: steps.cache_pg.outputs.cache-hit != 'true'
+        if: steps.cache_pg.outputs.cache-hit != 'true'
         working-directory: pg_src
         env:
           #
@@ -174,7 +180,7 @@ jobs:
             --with-uuid=e2fs
 
       - name: Build and install PostgreSQL (includes pg_pathcheck)
-#        if: steps.cache_pg.outputs.cache-hit != 'true'
+        if: steps.cache_pg.outputs.cache-hit != 'true'
         id: build_ext
         working-directory: pg_src
         run: |
@@ -182,7 +188,7 @@ jobs:
           make install -s
 
       - name: Rebuild pg_pathcheck on cache hit
-#        if: steps.cache_pg.outputs.cache-hit == 'true'
+        if: steps.cache_pg.outputs.cache-hit == 'true'
         id: build_ext_cached
         working-directory: pg_src/contrib/pg_pathcheck
         run: |

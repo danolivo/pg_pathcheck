@@ -11,13 +11,6 @@
 #	  their own NodeTag (gen_node_support.pl does the same upstream), so we
 #	  skip emitting X(T_S) for them.
 #
-#	  In addition to PATH_TAG_LIST, we emit a structural hash
-#	  PPC_PATH_HASH_T_<Subtype> for every concrete Path subtype.  The hash
-#	  is derived from the struct's body after comments, pg_node_attr(...)
-#	  invocations and redundant whitespace have been stripped, so cosmetic
-#	  edits do not fire the guard.  Any field addition, removal, rename,
-#	  type change or reordering does.
-#
 # usage:
 #	  perl gen_pathtags.pl <path-to-pathnodes.h> <output-header>
 #
@@ -28,7 +21,6 @@
 
 use strict;
 use warnings FATAL => 'all';
-use Digest::MD5 qw(md5_hex);
 
 my $input  = shift @ARGV;
 my $output = shift @ARGV;
@@ -49,7 +41,6 @@ $src =~ s{//[^\n]*}{}g;
 # field's type so we can climb the inheritance chain.
 my %first_field_type;
 my %is_abstract;
-my %body_hash;
 my @decl_order;
 
 while ($src =~ /typedef \s+ struct \s+ (\w+) \s* \{ ( (?: [^{}]++ | \{[^{}]*\} )* ) \}/gxs)
@@ -62,18 +53,9 @@ while ($src =~ /typedef \s+ struct \s+ (\w+) \s* \{ ( (?: [^{}]++ | \{[^{}]*\} )
 		if $body =~ /pg_node_attr \s* \( (?: [^()]* | \([^()]*\) )* \b abstract \b (?: [^()]* | \([^()]*\) )* \)/x;
 
 	# Remove every pg_node_attr(...) invocation (struct-level and trailing
-	# field-level), so that split-by-semicolon yields clean field declarations
-	# and so that annotation changes do not perturb the structural hash.
+	# field-level), so that split-by-semicolon below yields clean field
+	# declarations.
 	1 while $body =~ s/pg_node_attr \s* \( (?: [^()]* | \([^()]*\) )* \)//gx;
-
-	# Canonical form for hashing: all whitespace collapsed to single spaces.
-	# Comments are already stripped at file level; pg_node_attr invocations
-	# were just removed.  What remains is the field layout, which is exactly
-	# what walk_path() makes assumptions about.
-	my $canonical = $body;
-	$canonical =~ s/\s+/ /g;
-	$canonical =~ s/^\s+|\s+$//g;
-	$body_hash{$name} = substr(md5_hex($canonical), 0, 16);
 
 	my $first_type;
 	for my $field (split /;/, $body)
@@ -144,13 +126,6 @@ print $out <<"EOT";
  *				return false;
  *		}
  *
- *	  In addition, PPC_PATH_HASH_T_<Subtype> gives a 64-bit structural
- *	  hash of that subtype's body — stable under cosmetic edits, changes
- *	  on any real field addition/removal/rename/type-change/reorder.
- *	  pg_pathcheck.c cross-checks these against a hand-blessed mirror so
- *	  an upstream layout change fails the build before walk_path() can
- *	  silently miss a new sub-path field.
- *
  *-------------------------------------------------------------------------
  */
 #ifndef PATHTAGS_GENERATED_H
@@ -163,23 +138,6 @@ for (my $i = 0; $i < @emitted; $i++)
 {
 	my $trailer = ($i < $#emitted) ? ' \\' : '';
 	print $out "\tX(T_$emitted[$i])$trailer\n";
-}
-
-print $out "\n";
-
-# Longest tag name, so we can align the hash constants for readability.
-my $maxlen = 0;
-for my $name (@emitted)
-{
-	my $len = length("PPC_PATH_HASH_T_$name");
-	$maxlen = $len if $len > $maxlen;
-}
-
-for my $name (@emitted)
-{
-	my $symbol = "PPC_PATH_HASH_T_$name";
-	my $pad	   = ' ' x ($maxlen - length($symbol));
-	print $out "#define $symbol$pad 0x$body_hash{$name}ULL\n";
 }
 
 print $out "\n#endif\t\t\t\t\t\t\t/* PATHTAGS_GENERATED_H */\n";
