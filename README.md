@@ -9,13 +9,15 @@ Reports and analyses of findings are published on the [project wiki](https://git
 
 ## How it works
 
-The extension uses `create_upper_paths_hook` and `planner_shutdown_hook`. It walks the entire Path tree rooted at the top `PlannerInfo`, then recurses into every subquery subroot reachable via `RelOptInfo::subroot`, every subplan subroot in `PlannerGlobal::subroots`, and every parallel RelOptInfo (`unique_rel`, `grouped_rel`, `part_rels`). For each visited RelOptInfo, it inspects `pathlist`, `partial_pathlist`, `cheapest_parameterized_paths`, and the `cheapest_startup_path` / `cheapest_total_path` singletons. Compound Path nodes embed further Path pointers (`outerjoinpath`/`innerjoinpath`, `subpath`, `subpaths`, `bitmapqual`, ...); the walker descends into each, so a corrupt pointer one level down is still caught.
+The extension hooks `create_upper_paths_hook`, `set_rel_pathlist_hook`, and `set_join_pathlist_hook`. The end-of-planning walker fires inline at `UPPERREL_FINAL` of the top query — the latest planner-wide boundary PG 17 and 18 expose — and traverses the Path tree rooted at the top `PlannerInfo`, recursing into every subquery subroot reachable via `RelOptInfo::subroot`, every subplan subroot in `PlannerGlobal::subroots`, and every partition child in `RelOptInfo::part_rels[]`. For each visited RelOptInfo it inspects `pathlist`, `partial_pathlist`, `cheapest_parameterized_paths`, and the `cheapest_startup_path` / `cheapest_total_path` singletons. Compound Path nodes embed further Path pointers (`outerjoinpath`/`innerjoinpath`, `subpath`, `subpaths`, `bitmapqual`, ...); the walker descends into each, so a corrupt pointer one level down is still caught.
+
+The walk runs before `create_plan` and `setrefs.c` have executed, so any Path-lifetime bug visible only during those later stages is out of scope; base-, join- and upper-rel Path generation is complete by `UPPERREL_FINAL`, which covers the bulk of the detection surface.
 
 Two detection mechanisms run together. The first is a NodeTag whitelist: if `path->type` is not one of the known Path-family node tags, the memory has been freed (with `CLOBBER_FREED_MEMORY` the bytes read as `0x7F`) or reallocated for a node of a different class. The second is a parent-match check on base and join rels: every Path found directly on the rel's own lists must carry `path->parent == rel`. A mismatch catches same-size-class aliasing, where the freed slot has been recycled into another Path that passes the tag test — the parent pointer reveals the slot has been claimed by a different owner.
 
 ## Installing
 
-The `pg_pathcheck` targets **PostgreSQL master**. Since it is a pure module without any UI registered in the database, it uses `PG_MODULE_MAGIC_EXT` to expose the code version and the `extension_state` slot API. For better results, use a **cassert build** so that `CLOBBER_FREED_MEMORY` is enabled. A typical configure line:
+This branch of `pg_pathcheck` targets **PostgreSQL 17 and 18**. The extension is a pure module — it registers no SQL objects, only planner hooks activated at library load. PG 18 advertises the version string via `PG_MODULE_MAGIC_EXT`; PG 17 predates that macro and falls back to plain `PG_MODULE_MAGIC` (no version metadata is exposed). For better results, use a **cassert build** so that `CLOBBER_FREED_MEMORY` is enabled. A typical configure line:
 
 ```bash
 ./configure --prefix=/path/to/install \
@@ -82,6 +84,15 @@ SET pg_pathcheck.elevel = 'panic';    -- PANIC → core dump
 
 Use `error` when you want to pin down exactly which query triggers a finding in a regression run (the test will fail with the guilty query in the error message). Use `panic` when you want a core dump for post-mortem analysis of the bad pathlist.
 
+### `pg_pathcheck.end_walk` — master switch for the end-of-planning walk
+
+```sql
+SET pg_pathcheck.end_walk = on;       -- default
+SET pg_pathcheck.end_walk = off;      -- silence the walker without unloading
+```
+
+Controls whether the walker fires at `UPPERREL_FINAL` of the top query. Turn off when you want to load the library purely for the per-stage tripwires (when `stage_checks` is on), or to silence the walker for a specific session without unloading the shared library.
+
 ### `pg_pathcheck.stage_checks` — per-stage tripwires
 
 ```sql
@@ -89,7 +100,7 @@ SET pg_pathcheck.stage_checks = off;  -- default
 SET pg_pathcheck.stage_checks = on;   -- walk pathlists at every hook boundary
 ```
 
-By default only the end-of-planning walker runs (at `planner_shutdown_hook`). That catches corruption but tells you nothing about *when* during planning it happened.
+By default only the end-of-planning walker runs. That catches corruption but tells you nothing about *when* during planning it happened.
 
 Turning `stage_checks` on adds three extra tripwires that fire during planning:
 
@@ -163,7 +174,7 @@ means 800 occurrences of the same signature were found; opening the indicated `r
 
 ## When something fires in your code
 
-If you are running pg_pathcheck against a patch you are writing or an extension you maintain, and it flags something that was not there on the unmodified master:
+If you are running pg_pathcheck against a patch you are writing or an extension you maintain, and it flags something that was not there on the unmodified PG 17 / 18 stable branch:
 
 1. **Find the triggering query.** The `HINT:` line names it; re-run with `SET pg_pathcheck.elevel = 'error'` to get the exact test query that causes the fault.
 2. **Identify the rel and field.** `target rel {a, b} in cheapest_startup_path` names both the RelOptInfo and the specific slot that is stale.
@@ -171,60 +182,64 @@ If you are running pg_pathcheck against a patch you are writing or an extension 
 4. **Check your `pfree` / `list_delete_cell` pairing.** Most findings reduce to "I freed a path but did not remove it from the list" or "I kept a pointer to a path across a stage that frees it".
 5. **If the fix is in core planner code**, please share it on pgsql-hackers — this is the wider discussion pg_pathcheck is meant to feed.
 
-## Bumping PostgreSQL
+## Tracking PG 17.x and 18.x point releases
 
-The walker depends on the layout of every `Path` subtype in
-`src/include/nodes/pathnodes.h`. When you pull a new PostgreSQL master and
-that header has moved, the build catches the drift before it turns into a
-runtime `Assert(false)` in `walk_path()`.
+The walker depends on the field names of every `Path` subtype in
+`src/include/nodes/pathnodes.h`. The set of NodeTags that count as Path
+subtypes is generated at build time by `gen_pathtags.pl` from whichever
+`pathnodes.h` is installed, so `is_path_tag()` cannot drift out of sync —
+but the walker's per-subtype switch in `walk_path()` accesses fields by
+name and assumes the PG 17 / PG 18 layout.
 
-There are two compile-time guards in `pg_pathcheck.c`:
+What you should know about back-branch drift:
 
-- **Subtype-set guard.** `PPC_WALK_PATH_EXPECTED_HASHES` must list exactly
-  the same set of concrete Path subtypes as `PATH_TAG_LIST` (generated from
-  `pathnodes.h`). If core adds or removes a subtype, a `static_assert`
-  fires naming the mismatch.
+- **A field rename in a back-branch fix breaks the build at `walk_path()`.**
+  This is the loud failure mode — fix the access knowingly, do not just
+  rename the cast.
+- **A field addition is silent.** If a back-branch adds a new `Path *`
+  field on an already-walked struct, `walk_path()` continues to compile
+  and silently narrows coverage; only an audit against `pathnodes.h` will
+  catch that. Layout changes of this kind on stable branches are rare but
+  not unheard of.
 
-- **Layout guard.** Each entry in `PPC_WALK_PATH_EXPECTED_HASHES` carries a
-  64-bit structural hash of its subtype's body (comments,
-  `pg_node_attr(...)` and redundant whitespace stripped before hashing).
-  If core edits any walked struct, a `static_assert` fires naming the
-  specific subtype.
-
-### Re-bless workflow
-
-1. Rebuild. The failing assertion tells you whether the subtype *set* or a
-   specific subtype's *layout* drifted, and which subtype.
-2. Read the commit in upstream that touched `pathnodes.h`.
-3. **Audit `walk_path()`**. For each drifted subtype, confirm that the
-   field accesses in its `case` still reach the same sub-paths. Add cases
-   for new subtypes; remove cases for deleted ones. Teach `walk_path()`
-   about any new `Path *` or path-list fields.
-4. Run `make bless-path-hashes`. This rewrites the
-   `PPC_WALK_PATH_EXPECTED_HASHES` block in `pg_pathcheck.c` with the
-   current hashes. **Do not run this without doing step 3 first** — it
-   defeats the entire guard.
-5. Rebuild. The build should be green again.
-
-### Scope and limitations
-
-- The layout hash covers only a subtype's own body. Embedded parent
-  structs (`JoinPath` inside `NestPath`, `SortPath` inside
-  `IncrementalSortPath`) are not hashed transitively; they rely on their
-  own independent hash entries. Today every parent in the chain is
-  independently guarded, so this is sound — but if future walker code
-  dereferences a non-`Path` struct embedded in a Path, that struct's
-  layout changes will *not* trip the guard and must be handled
-  separately.
-- Cosmetic edits in `pathnodes.h` (comment rewrap, `pg_node_attr`
-  annotation changes, whitespace) are filtered out of the hash, so they
-  do not force a re-bless.
-- Field reordering that preserves the field set *does* force a re-bless
-  even though the walker is typically unaffected. Accepted cost.
+If a 17.x or 18.x minor release does ship such a change, audit the
+affected `case` arm in `walk_path()` and update the access. There is no
+re-bless workflow on this branch — the structural-hash guards used on
+master were stripped because maintaining three parallel hash sets was
+not worth the cost.
 
 ## Continuous coverage
 
-The repo ships a GitHub Actions workflow (`.github/workflows/regress.yml`) that runs `make -k check-world` with `pg_pathcheck` loaded on every push to `main`, on every PR, on manual dispatch, and nightly. Artefacts include the raw server logs and a summary written to the job's step-summary panel. Point your fork or extension repo at the same workflow if you would like continuous coverage against PG master as it evolves.
+The repo ships a GitHub Actions workflow (`.github/workflows/regress.yml`) that runs `make -k check-world` with `pg_pathcheck` loaded, on every push to `main`, on every PR, on manual dispatch, and nightly. Artefacts include the raw server logs and a summary written to the job's step-summary panel.
+
+> **Note (this branch):** the workflow as shipped clones PostgreSQL master.
+> On the PG 17 / 18 branch the workflow needs to be retargeted at
+> `REL_17_STABLE` / `REL_18_STABLE` (or run as a matrix over both); until
+> that change lands, CI on this branch will not match the source and is
+> expected to fail.
+
+## Regression tests
+
+A small smoke test ships under `sql/pg_pathcheck.sql` with the blessed
+output in `expected/pg_pathcheck.out`. It exercises GUC registration and
+round-trip, the reserved-prefix mechanism (`MarkGUCPrefixReserved`), and
+a sweep of SQL shapes that reach the major Path subtypes the walker
+dispatches on. It does *not* test detection — see Phase 2 in the project
+notes for that.
+
+Run it against an installed cluster that has `pg_pathcheck` in
+`shared_preload_libraries`:
+
+```bash
+USE_PGXS=1 PG_CONFIG=/path/to/install/bin/pg_config make installcheck
+```
+
+In-tree builds use `make check`; the Makefile passes
+`--temp-config=pg_pathcheck.conf` so the temp instance preloads the
+library automatically. The same `expected/` file passes on PG 17.9 and
+PG 18.3.
+
+A few SQL shapes are deliberately avoided in the test (`GROUP BY a + ORDER BY a`, `DISTINCT b + ORDER BY b`) because at the time of writing they trigger a real `UPPERREL_ORDERED` pathlist finding on PG 18 stable. The walker is doing what it should; the test avoids the trigger only because the corrupt-memory `UNDEF(N)` value varies by memory layout and would make the regression diff non-portable. See the comment at the top of `sql/pg_pathcheck.sql` for context.
 
 ## Disclaimer
 

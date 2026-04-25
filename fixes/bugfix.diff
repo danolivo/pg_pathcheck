@@ -1,68 +1,8 @@
-From d4b2056492fa1b1b5791597212fcce861901dca3 Mon Sep 17 00:00:00 2001
-From: "Andrei V. Lepikhov" <lepihov@gmail.com>
-Date: Mon, 20 Apr 2026 17:25:27 +0200
-Subject: [PATCH v0] =?UTF-8?q?Avoid=20aliasing=20input=5Frel=20paths=20int?=
- =?UTF-8?q?o=20create=5Fordered=5Fpaths=20output=20When=20create=5Fordered?=
- =?UTF-8?q?=5Fpaths()=20found=20an=20already-sorted=20input=20path,=20it?=
- =?UTF-8?q?=20set=20sorted=5Fpath=20=3D=20input=5Fpath,=20sharing=20the=20?=
- =?UTF-8?q?pointer=20between=20input=5Frel->pathlist=20and=20what=20would?=
- =?UTF-8?q?=20become=20ordered=5Frel->pathlist.=20=20The=20subsequent=20pa?=
- =?UTF-8?q?thtarget=20check=20then=20called=20apply=5Fprojection=5Fto=5Fpa?=
- =?UTF-8?q?th(),=20which=20for=20projection-capable=20paths=20(including?=
- =?UTF-8?q?=20ProjectionPath,=20whose=20pathtype=20is=20T=5FResult)=20muta?=
- =?UTF-8?q?tes=20the=20path=20in=20place=20=E2=80=94=20giving=20it=20order?=
- =?UTF-8?q?ed=5Frel's=20target=20while=20it=20still=20sits=20in=20input=5F?=
- =?UTF-8?q?rel->pathlist.=20=20add=5Fpath(ordered=5Frel,=20sorted=5Fpath)?=
- =?UTF-8?q?=20accepted=20the=20first=20such=20entry;=20the=20next=20iterat?=
- =?UTF-8?q?ion's=20freshly-built=20ProjectionPath=20could=20then=20dominat?=
- =?UTF-8?q?e=20the=20shared=20entry=20and=20add=5Fpath()=20pfree'd=20it,?=
- =?UTF-8?q?=20leaving=20input=5Frel->pathlist=20holding=20a=20pointer=20to?=
- =?UTF-8?q?=20freed=20memory.=20=20The=20chunk=20is=20recycled=20almost=20?=
- =?UTF-8?q?immediately=20by=20a=20subsequent=20allocation=20in=20the=20sam?=
- =?UTF-8?q?e=20per-query=20context.=20The=20bug=20is=20silent=20on=20many?=
- =?UTF-8?q?=20workloads=20because=20the=20dominance=20decision=20in=20add?=
- =?UTF-8?q?=5Fpath()=20has=20to=20go=20the=20"wrong"=20way=20for=20the=20p?=
- =?UTF-8?q?free=20to=20fire,=20and=20tie-break=20handling=20keeps=20the=20?=
- =?UTF-8?q?old=20path=20often=20enough=20to=20mask=20it.=20=20It=20surface?=
- =?UTF-8?q?s=20reliably=20under=20CHAOS=5FMODE=20builds,=20which=20randomi?=
- =?UTF-8?q?se=20tie-breaking,=20and=20has=20been=20observed=20via=20pg=5Fp?=
- =?UTF-8?q?athcheck=20as=20pattern=20"ProjectionPath=20->=20SeqScan*"=20at?=
- =?UTF-8?q?=20pathlist[1]=20of=20single=20base-rel=20ORDER=20BY=20queries?=
- =?UTF-8?q?=20where=20the=20sort=5Finput=5Ftarget=20differs=20from=20the?=
- =?UTF-8?q?=20final=5Ftarget=20(e.g.,=20sorting=20by=20a=20column=20not=20?=
- =?UTF-8?q?in=20the=20SELECT=20list).=20Fix=20by=20always=20allocating=20a?=
- =?UTF-8?q?=20fresh=20ProjectionPath=20belonging=20to=20ordered=5Frel=20wh?=
- =?UTF-8?q?en=20is=5Fsorted=20is=20true,=20so=20that=20add=5Fpath()'s=20pf?=
- =?UTF-8?q?ree=20hits=20only=20ordered=5Frel's=20own=20wrapper.=20=20When?=
- =?UTF-8?q?=20input=5Fpath=20is=20itself=20a=20ProjectionPath=20the=20nest?=
- =?UTF-8?q?ed-=20ProjectionPath=20guard=20inside=20create=5Fprojection=5Fp?=
- =?UTF-8?q?ath()=20asserts=20the=20stripped=20wrapper's=20parent=20matches?=
- =?UTF-8?q?=20rel=20=E2=80=94=20which=20fails=20for=20an=20input=5Frel-own?=
- =?UTF-8?q?ed=20wrapper=20passed=20with=20rel=3Dordered=5Frel=20=E2=80=94?=
- =?UTF-8?q?=20so=20unwrap=20the=20inner=20subpath=20ahead=20of=20time=20an?=
- =?UTF-8?q?d=20let=20create=5Fprojection=5Fpath()=20build=20a=20clean=20or?=
- =?UTF-8?q?dered=5Frel-parented=20wrapper=20around=20it.=20The=20target-pr?=
- =?UTF-8?q?ojection=20step=20that=20used=20to=20follow=20the=20is=5Fsorted?=
- =?UTF-8?q?=20branch=20is=20moved=20under=20the=20!is=5Fsorted=20branch,?=
- =?UTF-8?q?=20since=20the=20new=20wrap=20already=20carries=20ordered=5Frel?=
- =?UTF-8?q?'s=20target.?=
-MIME-Version: 1.0
-Content-Type: text/plain; charset=UTF-8
-Content-Transfer-Encoding: 8bit
-
----
- src/backend/optimizer/plan/planner.c          | 45 +++++++++++++++----
- src/test/regress/expected/limit.out           |  6 +--
- .../regress/expected/select_distinct_on.out   | 26 ++++++-----
- src/test/regress/expected/select_parallel.out | 32 ++++++-------
- src/test/regress/expected/tsrf.out            |  8 ++--
- 5 files changed, 71 insertions(+), 46 deletions(-)
-
 diff --git a/src/backend/optimizer/plan/planner.c b/src/backend/optimizer/plan/planner.c
-index 56bb1d798e3..6752314e746 100644
+index 53eea5a5d35..933770d61ac 100644
 --- a/src/backend/optimizer/plan/planner.c
 +++ b/src/backend/optimizer/plan/planner.c
-@@ -5462,7 +5462,31 @@ create_ordered_paths(PlannerInfo *root,
+@@ -5345,7 +5345,31 @@ create_ordered_paths(PlannerInfo *root,
  												input_path->pathkeys, &presorted_keys);
  
  		if (is_sorted)
@@ -95,7 +35,7 @@ index 56bb1d798e3..6752314e746 100644
  		else
  		{
  			/*
-@@ -5494,15 +5518,18 @@ create_ordered_paths(PlannerInfo *root,
+@@ -5377,15 +5401,18 @@ create_ordered_paths(PlannerInfo *root,
  																	root->sort_pathkeys,
  																	presorted_keys,
  																	limit_tuples);
@@ -189,7 +129,7 @@ index 75b1e7d300f..4ae09c8b181 100644
  --
  -- Test the planner's ability to reorder the distinctClause Pathkeys to match
 diff --git a/src/test/regress/expected/select_parallel.out b/src/test/regress/expected/select_parallel.out
-index 933921d1860..a3d6f3d4576 100644
+index 0185ef661b1..f0af05606fc 100644
 --- a/src/test/regress/expected/select_parallel.out
 +++ b/src/test/regress/expected/select_parallel.out
 @@ -753,20 +753,18 @@ end;
@@ -237,7 +177,7 @@ index 933921d1860..a3d6f3d4576 100644
 -                     Sort Key: tenk1.tenthous
 -                     ->  Parallel Seq Scan on public.tenk1
 -                           Output: tenk1.tenthous, tenk1.two
-    SubPlan array_1
+    SubPlan 1
       ->  ProjectSet
             Output: generate_series(1, tenk1.two)
             ->  Result
@@ -247,10 +187,10 @@ index 933921d1860..a3d6f3d4576 100644
  -- must disallow pushing sort below gather when pathkey contains an SRF
  EXPLAIN (VERBOSE, COSTS OFF)
 diff --git a/src/test/regress/expected/tsrf.out b/src/test/regress/expected/tsrf.out
-index c4f7b187f5b..a0d295859ed 100644
+index d47b5f6ec57..a0f7d80c699 100644
 --- a/src/test/regress/expected/tsrf.out
 +++ b/src/test/regress/expected/tsrf.out
-@@ -459,12 +459,12 @@ reset enable_hashagg;
+@@ -457,12 +457,12 @@ reset enable_hashagg;
  -- case with degenerate ORDER BY
  explain (verbose, costs off)
  select 'foo' as f, generate_series(1,2) as g from few order by 1;
@@ -267,6 +207,3 @@ index c4f7b187f5b..a0d295859ed 100644
  (4 rows)
  
  select 'foo' as f, generate_series(1,2) as g from few order by 1;
--- 
-2.53.0
-

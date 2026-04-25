@@ -3,20 +3,14 @@
  * pg_pathcheck.c
  *	  Walk every Path in a finished query tree and flag freed / garbage nodes.
  *
- *	  Debug aid only.  When loaded, planner_shutdown_hook traverses the top
- *	  PlannerInfo and every reachable subroot (RelOptInfo->subroot,
- *	  PlannerGlobal->subroots), visiting pathlist, partial_pathlist,
- *	  cheapest_*_path, non_recursive_path, and every sub-Path field of every
- *	  compound Path type.  Each visited Path is checked for a valid NodeTag;
- *	  a bogus tag (e.g. the 0x7F bytes from CLOBBER_FREED_MEMORY, or a node
- *	  allocated in a freed slot after pfree) is reported as a WARNING together
- *	  with the relation names resolved from the owning RelOptInfo's relids
- *	  and the full contents of the containing pathlist.
+ *	  Debug aid only.  Targets PostgreSQL 17 and 18.  Hooks
+ *	  create_upper_paths_hook at UPPERREL_FINAL of the top query and runs
+ *	  walk_top_root() inline; bogus or alias-recycled Paths are reported
+ *	  with relation names and pathlist contents.  See walk_top_root(),
+ *	  walk_path() and is_path_tag() for the per-function detail.
  *
- *	  planner_shutdown_hook is not handed the top PlannerInfo directly, so we
- *	  stash it from create_upper_paths_hook into PlannerGlobal->extension_state.
- *	  That slot lives in the planner's per-query context and is reclaimed on
- *	  both normal exit and elog(ERROR), so nothing to clean up ourselves.
+ * Copyright (c) 2026 Andrei Lepikhov
+ * Released under the MIT License; see LICENSE in the project root.
  *
  *-------------------------------------------------------------------------
  */
@@ -25,7 +19,6 @@
 #include "fmgr.h"
 #include "miscadmin.h"
 #include "nodes/pathnodes.h"
-#include "optimizer/extendplan.h"
 #include "optimizer/paths.h"
 #include "optimizer/planner.h"
 #include "tcop/tcopprot.h"
@@ -36,23 +29,24 @@
 #include "pathtags_generated.h"
 
 #define PPC_NAME	"pg_pathcheck"
-#define PPC_VERSION	"0.9"
+#define PPC_VERSION	"0.9.1"
 
+#if PG_VERSION_NUM >= 180000
 PG_MODULE_MAGIC_EXT(
 	.name = PPC_NAME,
 	.version = PPC_VERSION
 );
+#else
+/* PG 17 predates PG_MODULE_MAGIC_EXT. */
+PG_MODULE_MAGIC;
+#endif
 
 void		_PG_init(void);
 
 /* Chained upstream hooks. */
 static create_upper_paths_hook_type prev_create_upper_paths_hook = NULL;
-static planner_shutdown_hook_type prev_planner_shutdown_hook = NULL;
 static set_join_pathlist_hook_type prev_set_join_pathlist_hook = NULL;
 static set_rel_pathlist_hook_type prev_set_rel_pathlist_hook = NULL;
-
-/* Lazily resolved ID for our extension_state slot on PlannerGlobal. */
-static int	ppc_ext_id = -1;
 
 /*
  * GUC: pg_pathcheck.elevel
@@ -78,25 +72,32 @@ static const struct config_enum_entry ppc_elevel_options[] = {
  *		number of base/join/upper stages and are only needed when narrowing
  *		down a bug already flagged by the end-of-planning walker.
  *
- *		The end-of-planning walker (planner_shutdown_hook) and the root
- *		stashing inside create_upper_paths_hook remain active regardless of
- *		this flag.
+ *		Independently of this flag, see pg_pathcheck.end_walk for the
+ *		end-of-planning walker.
  */
 static bool ppc_stage_checks = false;
 
 /*
- * Visited-pointer hash, rebuilt per top-level walk. Deduplication tool.
- * Prevents exponential blow-up when the same sub-path is reachable from
- * multiple parents (AppendPath children, cheapest_*_path aliases, etc.).
+ * GUC: pg_pathcheck.end_walk
+ *		Master switch for the end-of-planning walk fired at UPPERREL_FINAL of
+ *		the top query.  On by default; turn off to load the library purely for
+ *		the per-stage tripwires (when stage_checks is on) or to silence the
+ *		walker without unloading the library.
  */
-static HTAB *visited = NULL;
+static bool ppc_end_walk = true;
+
+/*
+ * The visited-pointer HTAB is created locally in walk_top_root() and threaded
+ * through the recursion as a parameter.  Keeping it off file-scope makes the
+ * lifetime visible at every call site and structurally rules out re-entrance
+ * surprises (e.g. nested planner() calls during outer planning); each walk
+ * has its own private dedup state.
+ */
 
 /* Forward declarations. */
 static void ppc_create_upper_paths(PlannerInfo *root, UpperRelationKind stage,
 								   RelOptInfo *input_rel, RelOptInfo *output_rel,
 								   void *extra);
-static void ppc_planner_shutdown(PlannerGlobal *glob, Query *parse,
-								 const char *query_string, PlannedStmt *pstmt);
 static void ppc_set_join_pathlist(PlannerInfo *root, RelOptInfo *joinrel,
 								  RelOptInfo *outerrel, RelOptInfo *innerrel,
 								  JoinType jointype, JoinPathExtraData *extra);
@@ -108,16 +109,17 @@ static void check_rel_pathlist(List *paths, const char *listname,
 							   RelOptInfo *rel, const char *ctx,
 							   PlannerInfo *root);
 static const char *upper_stage_name(UpperRelationKind stage);
-static void walk_planner_info(PlannerInfo *root);
-static void walk_rel(RelOptInfo *rel, PlannerInfo *root);
-static void walk_pathlist(List *paths, const char *listname,
+static void walk_top_root(PlannerInfo *top_root, PlannerGlobal *glob);
+static void walk_planner_info(HTAB *visited, PlannerInfo *root);
+static void walk_rel(HTAB *visited, RelOptInfo *rel, PlannerInfo *root);
+static void walk_pathlist(HTAB *visited, List *paths, const char *listname,
 						  RelOptInfo *rel, PlannerInfo *root);
-static void walk_path(Path *path, const char *source, List *container,
-					   RelOptInfo *rel, PlannerInfo *root);
+static void walk_path(HTAB *visited, Path *path, const char *source,
+					  List *container, RelOptInfo *rel, PlannerInfo *root);
 static void verify_path_parent(Path *path, RelOptInfo *expected,
 							   const char *source, List *container,
 							   PlannerInfo *root);
-static bool mark_visited(void *ptr);
+static bool mark_visited(HTAB *visited, void *ptr);
 static bool is_path_tag(NodeTag tag);
 static const char *tag_name(int tag);
 static const char *format_relnames(RelOptInfo *rel, PlannerInfo *root);
@@ -153,13 +155,21 @@ _PG_init(void)
 							 0,
 							 NULL, NULL, NULL);
 
+	DefineCustomBoolVariable(PPC_NAME ".end_walk",
+							 "Run the end-of-planning Path-tree walk at "
+							 "UPPERREL_FINAL of the top query.",
+							 "On by default.  Turn off to silence the walker "
+							 "without unloading the library.",
+							 &ppc_end_walk,
+							 true,
+							 PGC_USERSET,
+							 0,
+							 NULL, NULL, NULL);
+
 	MarkGUCPrefixReserved(PPC_NAME);
 
 	prev_create_upper_paths_hook = create_upper_paths_hook;
 	create_upper_paths_hook = ppc_create_upper_paths;
-
-	prev_planner_shutdown_hook = planner_shutdown_hook;
-	planner_shutdown_hook = ppc_planner_shutdown;
 
 	prev_set_join_pathlist_hook = set_join_pathlist_hook;
 	set_join_pathlist_hook = ppc_set_join_pathlist;
@@ -338,8 +348,10 @@ upper_stage_name(UpperRelationKind stage)
 /*
  * ppc_create_upper_paths
  *		Dual duty:
- *		  1. Capture the top-level PlannerInfo at UPPERREL_FINAL, since the
- *		     planner-shutdown hook is not handed the top root directly.
+ *		  1. Fire walk_top_root() at UPPERREL_FINAL of the top query.  The
+ *		     walk runs before create_plan / setrefs.c, so Path-lifetime bugs
+ *		     visible only after those stages are out of scope; base-, join-
+ *		     and upper-rel Path generation is complete by this point.
  *		  2. Check the input and output rels' pathlist / partial_pathlist at
  *		     every upper-rel stage.  This narrows detection from "end of
  *		     planning" to "end of this upper-rel stage", so a finding at
@@ -355,15 +367,15 @@ ppc_create_upper_paths(PlannerInfo *root, UpperRelationKind stage,
 		(*prev_create_upper_paths_hook) (root, stage, input_rel, output_rel,
 										 extra);
 
-	/* (1) stash top root so planner_shutdown_hook can find it */
-	if (root->parent_root == NULL && stage == UPPERREL_FINAL)
+	Assert(root != NULL && IsA(root, PlannerInfo));
+
+	if (ppc_end_walk &&
+		root->parent_root == NULL && stage == UPPERREL_FINAL)
 	{
-		if (ppc_ext_id < 0)
-			ppc_ext_id = GetPlannerExtensionId(PPC_NAME);
-		SetPlannerGlobalExtensionState(root->glob, ppc_ext_id, root);
+		Assert(root->glob != NULL);
+		walk_top_root(root, root->glob);
 	}
 
-	/* (2) per-stage pathlist check on input and output rels (opt-in) */
 	if (ppc_stage_checks)
 	{
 		const char *sname = upper_stage_name(stage);
@@ -379,50 +391,49 @@ ppc_create_upper_paths(PlannerInfo *root, UpperRelationKind stage,
 
 
 /*
- * ppc_planner_shutdown
- *		Walk all Paths reachable from the top root and from PlannerGlobal.
+ * walk_top_root
+ *		End-of-planning walker body.  Visits every RelOptInfo reachable from
+ *		top_root, recurses into glob->subroots, and sweeps glob->subpaths for
+ *		dangling pointers.
  */
 static void
-ppc_planner_shutdown(PlannerGlobal *glob, Query *parse,
-					 const char *query_string, PlannedStmt *pstmt)
+walk_top_root(PlannerInfo *top_root, PlannerGlobal *glob)
 {
-	PlannerInfo *top_root;
+	HASHCTL		ctl = {0};
+	HTAB	   *visited;
 
-	if (ppc_ext_id >= 0 &&
-		(top_root = GetPlannerGlobalExtensionState(glob, ppc_ext_id)) != NULL)
-	{
-		HASHCTL		ctl = {0};
+	Assert(top_root != NULL && IsA(top_root, PlannerInfo));
+	Assert(glob != NULL && IsA(glob, PlannerGlobal));
+	Assert(glob == top_root->glob);
 
-		ctl.keysize = sizeof(void *);
-		ctl.entrysize = sizeof(void *);
-		ctl.hcxt = CurrentMemoryContext;
+	ctl.keysize = sizeof(void *);
+	ctl.entrysize = sizeof(void *);
+	ctl.hcxt = CurrentMemoryContext;
 
-		/*
-		 * Do not care about previous value of the pointer. It might stay
-		 * initialized in case of previous internal error. But memory already
-		 * freed because of transactional memory context.
-		 */
-		visited = hash_create(PPC_NAME " visited", 1024, &ctl,
-							  HASH_ELEM | HASH_BLOBS | HASH_CONTEXT);
+	/*
+	 * Allocate the dedup HTAB in CurrentMemoryContext, which at hook-fire
+	 * time is the planner's per-query context (typically MessageContext for
+	 * a top-level query, or whatever context the caller of standard_planner
+	 * set up for a nested call).  hash_destroy() below releases it on the
+	 * normal return path; on ereport(ERROR) the context owner reclaims it
+	 * when the transaction or message context is reset, so we never leak.
+	 */
+	visited = hash_create(PPC_NAME " visited", 64, &ctl,
+						  HASH_ELEM | HASH_BLOBS | HASH_CONTEXT);
 
-		walk_planner_info(top_root);
+	walk_planner_info(visited, top_root);
 
-		/* Subplan PlannerInfos and their backing top-level Paths. */
-		foreach_node(PlannerInfo, root, glob->subroots)
-			walk_planner_info(root);
+	/* Subplan PlannerInfos and their backing top-level Paths. */
+	foreach_node(PlannerInfo, root, glob->subroots)
+		walk_planner_info(visited, root);
 
-		/*
-		 * Deliberately duplicated crawler - just to find potential
-		 * low-probability discrepancies or dangled pointers in this list itself
-		 */
-		walk_pathlist(glob->subpaths, "glob->subpaths", NULL, top_root);
+	/*
+	 * Deliberately duplicated crawler - just to find potential
+	 * low-probability discrepancies or dangled pointers in this list itself
+	 */
+	walk_pathlist(visited, glob->subpaths, "glob->subpaths", NULL, top_root);
 
-		hash_destroy(visited);
-		visited = NULL;
-	}
-
-	if (prev_planner_shutdown_hook)
-		(*prev_planner_shutdown_hook) (glob, parse, query_string, pstmt);
+	hash_destroy(visited);
 }
 
 
@@ -431,23 +442,25 @@ ppc_planner_shutdown(PlannerGlobal *glob, Query *parse,
  *		Visit every RelOptInfo on this root and recurse into its subroots.
  */
 static void
-walk_planner_info(PlannerInfo *root)
+walk_planner_info(HTAB *visited, PlannerInfo *root)
 {
 	int			i;
 
-	if (root == NULL || !mark_visited(root))
+	if (root == NULL || !mark_visited(visited, root))
 		return;
 
+	Assert(IsA(root, PlannerInfo));
 	check_stack_depth();
 
 	/* Upper rels: one List per UpperRelationKind. */
 	for (i = 0; i <= UPPERREL_FINAL; i++)
 	{
 		foreach_node(RelOptInfo, rel, root->upper_rels[i])
-			walk_rel(rel, root);
+			walk_rel(visited, rel, root);
 	}
 
 	/* Base rels and appendrel children. */
+	Assert(root->simple_rel_array_size >= 0);
 	Assert(root->simple_rel_array_size == 0 ||
 		   root->simple_rel_array != NULL);
 	for (i = 1; i < root->simple_rel_array_size; i++)
@@ -456,18 +469,21 @@ walk_planner_info(PlannerInfo *root)
 
 		if (rel == NULL)
 			continue;
-		walk_rel(rel, root);
+		walk_rel(visited, rel, root);
 		/* Recurse into subquery PlannerInfos. */
 		if (rel->subroot != NULL)
-			walk_planner_info(rel->subroot);
+		{
+			Assert(IsA(rel->subroot, PlannerInfo));
+			walk_planner_info(visited, rel->subroot);
+		}
 	}
 
 	/* Join rels collected during dynamic programming. */
 	foreach_node(RelOptInfo, rel, root->join_rel_list)
-		walk_rel(rel, root);
+		walk_rel(visited, rel, root);
 
 	/* Non-recursive term of a recursive CTE, if any. */
-	walk_path(root->non_recursive_path, "non_recursive_path", NULL,
+	walk_path(visited, root->non_recursive_path, "non_recursive_path", NULL,
 			  NULL, root);
 }
 
@@ -475,17 +491,19 @@ walk_planner_info(PlannerInfo *root)
 /*
  * walk_rel
  *		Visit every Path slot on a RelOptInfo, and recurse into parallel
- *		RelOptInfos that hang off it (unique_rel, grouped_rel, part_rels[]).
- *		Upward links (parent / top_parent) are intentionally not followed:
- *		those rels are reached via simple_rel_array or join_rel_list anyway.
+ *		RelOptInfos that hang off it (part_rels[]).  Upward links
+ *		(parent / top_parent) are intentionally not followed: those rels are
+ *		reached via simple_rel_array or join_rel_list anyway.
  */
 static void
-walk_rel(RelOptInfo *rel, PlannerInfo *root)
+walk_rel(HTAB *visited, RelOptInfo *rel, PlannerInfo *root)
 {
 	ListCell   *lc;
 
-	if (rel == NULL || !mark_visited(rel))
+	if (rel == NULL || !mark_visited(visited, rel))
 		return;
+
+	Assert(IsA(rel, RelOptInfo));
 
 	/*
 	 * Parent-match check for every Path directly attached to this rel.
@@ -512,34 +530,39 @@ walk_rel(RelOptInfo *rel, PlannerInfo *root)
 						   "cheapest_startup_path", NULL, root);
 		verify_path_parent(rel->cheapest_total_path, rel,
 						   "cheapest_total_path", NULL, root);
+		verify_path_parent(rel->cheapest_unique_path, rel,
+						   "cheapest_unique_path", NULL, root);
 	}
 
-	walk_pathlist(rel->pathlist, "pathlist", rel, root);
-	walk_pathlist(rel->partial_pathlist, "partial_pathlist", rel, root);
-	walk_pathlist(rel->cheapest_parameterized_paths,
+	walk_pathlist(visited, rel->pathlist, "pathlist", rel, root);
+	walk_pathlist(visited, rel->partial_pathlist, "partial_pathlist", rel, root);
+	walk_pathlist(visited, rel->cheapest_parameterized_paths,
 				  "cheapest_parameterized_paths", rel, root);
-	walk_path(rel->cheapest_startup_path, "cheapest_startup_path", NULL,
+	walk_path(visited, rel->cheapest_startup_path, "cheapest_startup_path",
+			  NULL, rel, root);
+	walk_path(visited, rel->cheapest_total_path, "cheapest_total_path", NULL,
 			  rel, root);
-	walk_path(rel->cheapest_total_path, "cheapest_total_path", NULL,
+	walk_path(visited, rel->cheapest_unique_path, "cheapest_unique_path", NULL,
 			  rel, root);
 
 	/*
-	 * Recurse into special RelOptInfos in case their paths are washed out of
-	 * the main pathlist.
+	 * Partition children: each one is also reachable via the upper_rels /
+	 * simple_rel_array traversal above, so this descent is normally
+	 * redundant.  Kept as a paranoid defence: if the main traversal misses
+	 * a partition rel because of structural drift, walking part_rels[]
+	 * gives a second chance to spot the corruption.
 	 */
-	if (rel->unique_rel != NULL)
-		walk_rel(rel->unique_rel, root);
-	if (rel->grouped_rel != NULL)
-		walk_rel(rel->grouped_rel, root);
-
-	/* Purely redundant. Just to be paranoid. */
 	if (rel->part_rels != NULL)
 	{
 		int	i;
 
+		Assert(rel->nparts >= 0);
 		for (i = 0; i < rel->nparts; i++)
 			if (rel->part_rels[i] != NULL)
-				walk_rel(rel->part_rels[i], root);
+			{
+				Assert(IsA(rel->part_rels[i], RelOptInfo));
+				walk_rel(visited, rel->part_rels[i], root);
+			}
 	}
 }
 
@@ -624,13 +647,13 @@ verify_path_parent(Path *path, RelOptInfo *expected, const char *source,
  *		Visit each Path in a List, tagging every element with the list's name.
  */
 static void
-walk_pathlist(List *paths, const char *listname,
+walk_pathlist(HTAB *visited, List *paths, const char *listname,
 			  RelOptInfo *rel, PlannerInfo *root)
 {
 	ListCell   *lc;
 
 	foreach(lc, paths)
-		walk_path((Path *) lfirst(lc), listname, paths, rel, root);
+		walk_path(visited, (Path *) lfirst(lc), listname, paths, rel, root);
 }
 
 
@@ -647,16 +670,19 @@ walk_pathlist(List *paths, const char *listname,
  *		container, when non-NULL, is the List whose full contents are dumped
  *		in the errdetail when corruption is detected.
  *
- *		Layout safety net: every Path subtype dereferenced below is guarded
- *		by a structural-hash entry in PPC_WALK_PATH_EXPECTED_HASHES further
- *		down in this file.  If you are here because a field name no longer
- *		compiles, *do not* paper over it by renaming the access — read the
- *		mirror block's header comment first: the hash-mismatch diagnostic
- *		will tell you which struct moved and why you are being forced to
- *		look.
+ *		Layout note: a back-branch rename of a walked field will break the
+ *		build here — fix the access knowingly, do not just rename the cast.
+ *		A back-branch *addition* of a new Path * field on an already-walked
+ *		struct compiles cleanly and silently narrows coverage; only an audit
+ *		of the case against pathnodes.h will catch that.
+ *
+ *		Audited for completeness against PG 17.9 and PG 18.3.  When bumping
+ *		the targeted PG version pair, re-audit by grepping pathnodes.h for
+ *		"Path[[:space:]]*\*" and confirming each hit is reached either from
+ *		a case below, from walk_rel(), or from walk_planner_info().
  */
 static void
-walk_path(Path *path, const char *source, List *container,
+walk_path(HTAB *visited, Path *path, const char *source, List *container,
 		  RelOptInfo *rel, PlannerInfo *root)
 {
 	NodeTag		tag;
@@ -682,7 +708,7 @@ walk_path(Path *path, const char *source, List *container,
 		return;
 	}
 
-	if (!mark_visited(path))
+	if (!mark_visited(visited, path))
 		return;
 
 	/*
@@ -697,138 +723,181 @@ walk_path(Path *path, const char *source, List *container,
 		case T_TidPath:
 		case T_TidRangePath:
 		case T_GroupResultPath:
-		case T_MinMaxAggPath:
 			/* No sub-Paths. */
 			break;
 
 		case T_BitmapHeapPath:
-			walk_path(((BitmapHeapPath *) path)->bitmapqual,
+			walk_path(visited, ((BitmapHeapPath *) path)->bitmapqual,
 					  "BitmapHeapPath.bitmapqual", NULL, rel, root);
 			break;
 		case T_BitmapAndPath:
-			walk_pathlist(((BitmapAndPath *) path)->bitmapquals,
+			walk_pathlist(visited, ((BitmapAndPath *) path)->bitmapquals,
 						  "BitmapAndPath.bitmapquals", rel, root);
 			break;
 		case T_BitmapOrPath:
-			walk_pathlist(((BitmapOrPath *) path)->bitmapquals,
+			walk_pathlist(visited, ((BitmapOrPath *) path)->bitmapquals,
 						  "BitmapOrPath.bitmapquals", rel, root);
 			break;
 
 		case T_SubqueryScanPath:
-			walk_path(((SubqueryScanPath *) path)->subpath,
+			walk_path(visited, ((SubqueryScanPath *) path)->subpath,
 					  "SubqueryScanPath.subpath", NULL, rel, root);
 			break;
 
 		case T_ForeignPath:
-			walk_path(((ForeignPath *) path)->fdw_outerpath,
+			walk_path(visited, ((ForeignPath *) path)->fdw_outerpath,
 					  "ForeignPath.fdw_outerpath", NULL, rel, root);
 			break;
 
 		case T_CustomPath:
-			walk_pathlist(((CustomPath *) path)->custom_paths,
+			walk_pathlist(visited, ((CustomPath *) path)->custom_paths,
 						  "CustomPath.custom_paths", rel, root);
 			break;
 
 		case T_AppendPath:
-			walk_pathlist(((AppendPath *) path)->subpaths,
+			walk_pathlist(visited, ((AppendPath *) path)->subpaths,
 						  "AppendPath.subpaths", rel, root);
 			break;
 		case T_MergeAppendPath:
-			walk_pathlist(((MergeAppendPath *) path)->subpaths,
+			walk_pathlist(visited, ((MergeAppendPath *) path)->subpaths,
 						  "MergeAppendPath.subpaths", rel, root);
 			break;
 
 		case T_MaterialPath:
-			walk_path(((MaterialPath *) path)->subpath,
+			walk_path(visited, ((MaterialPath *) path)->subpath,
 					  "MaterialPath.subpath", NULL, rel, root);
 			break;
 		case T_MemoizePath:
-			walk_path(((MemoizePath *) path)->subpath,
+			walk_path(visited, ((MemoizePath *) path)->subpath,
 					  "MemoizePath.subpath", NULL, rel, root);
 			break;
 		case T_GatherPath:
-			walk_path(((GatherPath *) path)->subpath,
+			walk_path(visited, ((GatherPath *) path)->subpath,
 					  "GatherPath.subpath", NULL, rel, root);
 			break;
 		case T_GatherMergePath:
-			walk_path(((GatherMergePath *) path)->subpath,
+			walk_path(visited, ((GatherMergePath *) path)->subpath,
 					  "GatherMergePath.subpath", NULL, rel, root);
 			break;
 
 		case T_NestPath:
 		case T_MergePath:
 		case T_HashPath:
-			walk_path(((JoinPath *) path)->outerjoinpath,
+			walk_path(visited, ((JoinPath *) path)->outerjoinpath,
 					  "JoinPath.outerjoinpath", NULL, rel, root);
-			walk_path(((JoinPath *) path)->innerjoinpath,
+			walk_path(visited, ((JoinPath *) path)->innerjoinpath,
 					  "JoinPath.innerjoinpath", NULL, rel, root);
 			break;
 
 		case T_ProjectionPath:
-			walk_path(((ProjectionPath *) path)->subpath,
+			walk_path(visited, ((ProjectionPath *) path)->subpath,
 					  "ProjectionPath.subpath", NULL, rel, root);
 			break;
 		case T_ProjectSetPath:
-			walk_path(((ProjectSetPath *) path)->subpath,
+			walk_path(visited, ((ProjectSetPath *) path)->subpath,
 					  "ProjectSetPath.subpath", NULL, rel, root);
 			break;
 		case T_SortPath:
-			walk_path(((SortPath *) path)->subpath,
+			walk_path(visited, ((SortPath *) path)->subpath,
 					  "SortPath.subpath", NULL, rel, root);
 			break;
 		case T_IncrementalSortPath:
-			walk_path(((IncrementalSortPath *) path)->spath.subpath,
+			walk_path(visited, ((IncrementalSortPath *) path)->spath.subpath,
 					  "IncrementalSortPath.subpath", NULL, rel, root);
 			break;
 		case T_GroupPath:
-			walk_path(((GroupPath *) path)->subpath,
+			walk_path(visited, ((GroupPath *) path)->subpath,
 					  "GroupPath.subpath", NULL, rel, root);
 			break;
 		case T_UniquePath:
-			walk_path(((UniquePath *) path)->subpath,
+			walk_path(visited, ((UniquePath *) path)->subpath,
 					  "UniquePath.subpath", NULL, rel, root);
 			break;
+		case T_UpperUniquePath:
+			/* PG 17/18 DISTINCT-stage uniquification; UniquePath is the IN-form. */
+			walk_path(visited, ((UpperUniquePath *) path)->subpath,
+					  "UpperUniquePath.subpath", NULL, rel, root);
+			break;
 		case T_AggPath:
-			walk_path(((AggPath *) path)->subpath,
+			walk_path(visited, ((AggPath *) path)->subpath,
 					  "AggPath.subpath", NULL, rel, root);
 			break;
 		case T_GroupingSetsPath:
-			walk_path(((GroupingSetsPath *) path)->subpath,
+			walk_path(visited, ((GroupingSetsPath *) path)->subpath,
 					  "GroupingSetsPath.subpath", NULL, rel, root);
 			break;
+		case T_MinMaxAggPath:
+			{
+				/*
+				 * MinMaxAggPath has no top-level Path *, but each
+				 * MinMaxAggInfo on mmaggregates carries an access path
+				 * (the index-scan-with-LIMIT-1 sub-plan that materialises
+				 * one MIN/MAX value) and the PlannerInfo subroot used to
+				 * plan it.  Neither is reachable from glob->subroots
+				 * (preprocess_minmax_aggregates does not register subroots
+				 * there), so we walk them explicitly here.  walk_planner_info
+				 * is idempotent via the visited HTAB, so we can call it
+				 * defensively without worrying about double-traversal.
+				 */
+				MinMaxAggPath *mmap = (MinMaxAggPath *) path;
+				ListCell   *lc;
+
+				foreach(lc, mmap->mmaggregates)
+				{
+					MinMaxAggInfo *info = lfirst_node(MinMaxAggInfo, lc);
+
+					walk_path(visited, info->path, "MinMaxAggInfo.path",
+							  NULL, rel, root);
+					if (info->subroot != NULL)
+						walk_planner_info(visited, info->subroot);
+				}
+			}
+			break;
 		case T_WindowAggPath:
-			walk_path(((WindowAggPath *) path)->subpath,
+			walk_path(visited, ((WindowAggPath *) path)->subpath,
 					  "WindowAggPath.subpath", NULL, rel, root);
 			break;
 
 		case T_SetOpPath:
-			walk_path(((SetOpPath *) path)->leftpath,
+#if PG_VERSION_NUM >= 180000
+			walk_path(visited, ((SetOpPath *) path)->leftpath,
 					  "SetOpPath.leftpath", NULL, rel, root);
-			walk_path(((SetOpPath *) path)->rightpath,
+			walk_path(visited, ((SetOpPath *) path)->rightpath,
 					  "SetOpPath.rightpath", NULL, rel, root);
+#else
+			/* PG 17 had a single subpath; PG 18 split it into left/right. */
+			walk_path(visited, ((SetOpPath *) path)->subpath,
+					  "SetOpPath.subpath", NULL, rel, root);
+#endif
 			break;
 		case T_RecursiveUnionPath:
-			walk_path(((RecursiveUnionPath *) path)->leftpath,
+			/* leftpath = non-recursive term, rightpath = recursive term. */
+			walk_path(visited, ((RecursiveUnionPath *) path)->leftpath,
 					  "RecursiveUnionPath.leftpath", NULL, rel, root);
-			walk_path(((RecursiveUnionPath *) path)->rightpath,
+			walk_path(visited, ((RecursiveUnionPath *) path)->rightpath,
 					  "RecursiveUnionPath.rightpath", NULL, rel, root);
 			break;
 
 		case T_LockRowsPath:
-			walk_path(((LockRowsPath *) path)->subpath,
+			walk_path(visited, ((LockRowsPath *) path)->subpath,
 					  "LockRowsPath.subpath", NULL, rel, root);
 			break;
 		case T_ModifyTablePath:
-			walk_path(((ModifyTablePath *) path)->subpath,
+			walk_path(visited, ((ModifyTablePath *) path)->subpath,
 					  "ModifyTablePath.subpath", NULL, rel, root);
 			break;
 		case T_LimitPath:
-			walk_path(((LimitPath *) path)->subpath,
+			walk_path(visited, ((LimitPath *) path)->subpath,
 					  "LimitPath.subpath", NULL, rel, root);
 			break;
 
 		default:
-			/* is_path_tag accepted it, so this can't happen. */
+			/*
+			 * Reachable on PG 17 or 18 only if a back-branch added a Path
+			 * subtype (so PATH_TAG_LIST grew) but this switch was not
+			 * taught about it.  Loud Assert in cassert builds; in
+			 * production we miss the new subtype's sub-paths.
+			 */
 			Assert(false);
 			break;
 	}
@@ -870,6 +939,11 @@ tag_name(int tag)
  *		resolving each member through root->simple_rte_array[i]->eref.
  *		Returns a palloc'd string like "{t1, t2}" or "(unknown)" when
  *		the rel or root is not available.
+ *
+ *		Defensive against the very thing this extension hunts for: we are
+ *		typically called from inside an ereport() that fired *because*
+ *		something was corrupt, so rel->relids may itself be a freed or
+ *		garbage Bitmapset.  Validate the NodeTag before iterating.
  */
 static const char *
 format_relnames(RelOptInfo *rel, PlannerInfo *root)
@@ -880,6 +954,8 @@ format_relnames(RelOptInfo *rel, PlannerInfo *root)
 
 	if (rel == NULL || rel->relids == NULL || root == NULL)
 		return "(unknown)";
+	if (!IsA(rel->relids, Bitmapset))
+		return "(invalid relids)";
 
 	initStringInfo(&buf);
 	appendStringInfoChar(&buf, '{');
@@ -961,7 +1037,7 @@ format_pathlist(List *paths)
  *		Insert ptr into the visited set; true on first visit, false otherwise.
  */
 static bool
-mark_visited(void *ptr)
+mark_visited(HTAB *visited, void *ptr)
 {
 	bool	found;
 
@@ -972,127 +1048,6 @@ mark_visited(void *ptr)
 	return !found;
 }
 
-
-/*
- * PPC_WALK_PATH_EXPECTED_HASHES
- *		Single hand-maintained source of truth for the set of Path subtypes
- *		walk_path() knows how to descend into, together with each subtype's
- *		expected structural hash.  Drives two compile-time checks:
- *
- *		  - The count of entries here must equal the count in PATH_TAG_LIST
- *			(generated from pathnodes.h).  Catches any addition or removal
- *			of a Path subtype in core: the build fails with a message
- *			pointing here.
- *
- *		  - Each entry's expected hash must equal PPC_PATH_HASH_T_<Subtype>
- *			from pathtags_generated.h.  Catches any layout edit inside an
- *			existing Path struct (field add/remove/rename/retype/reorder),
- *			naming the specific subtype that drifted.
- *
- *		When the build breaks:
- *
- *		  1. If the count mismatches: a subtype was added or removed in
- *			 pathnodes.h.  Teach walk_path() how to descend into the new
- *			 subtype (or let it fall through if it has no sub-Paths), then
- *			 add or remove the corresponding entry below.
- *
- *		  2. If a per-tag hash mismatches: the named subtype's body changed.
- *			 Diff pathnodes.h against the version the hash was blessed
- *			 against, audit walk_path()'s case for that subtype, and run
- *			 `make bless-path-hashes` to refresh this list.  (The make
- *			 target is a convenience; the audit of walk_path() is not
- *			 automated and is mandatory.)
- *
- *		All concrete subtypes are listed — even the ones walk_path() treats
- *		as leaves (T_Path, T_IndexPath, T_TidPath, T_TidRangePath,
- *		T_GroupResultPath, T_MinMaxAggPath) — because "no sub-Paths to
- *		descend" is itself a layout claim that can rot if core grows a new
- *		Path * field in one of them.
- *
- *		Limitation: each hash covers only its subtype's own body, not the
- *		bodies of embedded parent structs.  walk_path() reaches into
- *		embedded parents at exactly one point -- IncrementalSortPath's
- *		spath.subpath -- and that access is protected by the SortPath
- *		entry below.  If future walker code dereferences a non-Path struct
- *		embedded in a Path (e.g. ((Foo *) path)->non_path.field), layout
- *		changes in that non-Path struct will not trip this guard and must
- *		be handled separately.
- *
- *		See contrib/pg_pathcheck/README.md section "Bumping PostgreSQL"
- *		for the end-to-end workflow.
- */
-#define PPC_WALK_PATH_EXPECTED_HASHES(X) \
-	X(T_Path,                0x09ee69a9e5a8f23bULL) \
-	X(T_IndexPath,           0xd9eab6b3c997d515ULL) \
-	X(T_BitmapHeapPath,      0x75a7b181f72c352dULL) \
-	X(T_BitmapAndPath,       0xccc395f9829cc5eeULL) \
-	X(T_BitmapOrPath,        0xccc395f9829cc5eeULL) \
-	X(T_TidPath,             0x689cb40f04282c9cULL) \
-	X(T_TidRangePath,        0x49cc3bbec71064f4ULL) \
-	X(T_SubqueryScanPath,    0x90f989f41b57b041ULL) \
-	X(T_ForeignPath,         0xf6d2f824716c5cd8ULL) \
-	X(T_CustomPath,          0x349311c5592f0b5bULL) \
-	X(T_AppendPath,          0xb56a41497d3eb372ULL) \
-	X(T_MergeAppendPath,     0xfce0f29acc68fbbcULL) \
-	X(T_GroupResultPath,     0x84701fcd7617cc00ULL) \
-	X(T_MaterialPath,        0x90f989f41b57b041ULL) \
-	X(T_MemoizePath,         0x3dd2cdd46b1c4006ULL) \
-	X(T_GatherPath,          0x50237ef02554d33dULL) \
-	X(T_GatherMergePath,     0x5468656d4d359ad1ULL) \
-	X(T_NestPath,            0xc9d7126d080e587eULL) \
-	X(T_MergePath,           0x18d4e85c337a4499ULL) \
-	X(T_HashPath,            0x7fabf0c425c0856cULL) \
-	X(T_ProjectionPath,      0xe9172dd4d292d671ULL) \
-	X(T_ProjectSetPath,      0x90f989f41b57b041ULL) \
-	X(T_SortPath,            0x90f989f41b57b041ULL) \
-	X(T_IncrementalSortPath, 0x4c69aafa5f126723ULL) \
-	X(T_GroupPath,           0xd3ffe008ac1ac2fcULL) \
-	X(T_UniquePath,          0x5654a3410d707ef9ULL) \
-	X(T_AggPath,             0x179cb625db854a97ULL) \
-	X(T_GroupingSetsPath,    0x62c65256f41bdcb6ULL) \
-	X(T_MinMaxAggPath,       0xda76e318ee433a2fULL) \
-	X(T_WindowAggPath,       0xccabff582235b106ULL) \
-	X(T_SetOpPath,           0xd849dc901753a051ULL) \
-	X(T_RecursiveUnionPath,  0x46f3b9fc9f2321f6ULL) \
-	X(T_LockRowsPath,        0x094815119f154b2dULL) \
-	X(T_ModifyTablePath,     0x1ea4932e8ac9b889ULL) \
-	X(T_LimitPath,           0x4fd0995222ca414eULL)
-
-/*
- * Count-parity check: the number of subtypes we expect walk_path() to
- * handle must equal the number actually present in PATH_TAG_LIST.  This
- * is what catches additions and removals in core; the per-tag hash
- * asserts below catch layout changes on existing subtypes.
- */
-#define PPC_COUNT_ONE_ARG(t)			+ 1
-#define PPC_COUNT_TWO_ARG(t, expected)	+ 1
-
-StaticAssertDecl((0 PATH_TAG_LIST(PPC_COUNT_ONE_ARG)) ==
-				 (0 PPC_WALK_PATH_EXPECTED_HASHES(PPC_COUNT_TWO_ARG)),
-				 "pg_pathcheck: number of Path subtypes in pathnodes.h "
-				 "no longer matches the set handled by walk_path(); add "
-				 "or remove entries in PPC_WALK_PATH_EXPECTED_HASHES "
-				 "and teach walk_path() about the change.");
-
-#undef PPC_COUNT_ONE_ARG
-#undef PPC_COUNT_TWO_ARG
-
-/*
- * Per-subtype hash check: expand each entry into a StaticAssertDecl that
- * compares the blessed hash against the one gen_pathtags.pl just computed.
- * Token-paste PPC_PATH_HASH_ onto the tag to reference the generated
- * constant; stringify the tag so the diagnostic names the exact struct.
- */
-#define PPC_HASH_ASSERT(tag, expected)										\
-	StaticAssertDecl((expected) == PPC_PATH_HASH_##tag,						\
-					 "pg_pathcheck: struct layout for " #tag " changed in "	\
-					 "pathnodes.h; audit walk_path() and run "				\
-					 "`make bless-path-hashes` to refresh "					\
-					 "PPC_WALK_PATH_EXPECTED_HASHES.");
-
-PPC_WALK_PATH_EXPECTED_HASHES(PPC_HASH_ASSERT)
-
-#undef PPC_HASH_ASSERT
 
 /*
  * is_path_tag
