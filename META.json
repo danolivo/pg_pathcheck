@@ -1,0 +1,60 @@
+{
+   "name": "pg_pathcheck",
+   "abstract": "Validate planner Path trees for freed/garbage memory.",
+   "description": "pg_pathcheck is a debug aid that walks every Path in a finished query tree and flags freed or alias-recycled nodes via NodeTag and parent-match checks. It is a pure shared-library module loaded via shared_preload_libraries; it registers no SQL objects. This release targets PostgreSQL 17 and 18 stable branches.",
+   "version": "0.9.1",
+   "maintainer": [
+      "Andrei Lepikhov <andrei.lepikhov@pgedge.com>"
+   ],
+   "license": "mit",
+
+   "provides": {
+      "pg_pathcheck": {
+         "abstract": "Validate planner Path trees for freed/garbage memory.",
+         "file": "pg_pathcheck.c",
+         "version": "0.9.1",
+         "docfile": "README.md"
+      }
+   },
+
+   "prereqs": {
+      "runtime": {
+         "requires": {
+            "PostgreSQL": "17.0.0"
+         }
+      },
+      "configure": {
+         "requires": {
+            "PostgreSQL": "17.0.0"
+         }
+      }
+   },
+
+   "resources": {
+      "homepage": "https://github.com/danolivo/pg_pathcheck",
+      "bugtracker": {
+         "web": "https://github.com/danolivo/pg_pathcheck/issues"
+      },
+      "repository": {
+         "url": "git://github.com/danolivo/pg_pathcheck.git",
+         "web": "https://github.com/danolivo/pg_pathcheck",
+         "type": "git"
+      }
+   },
+
+   "generated_by": "Andrei Lepikhov",
+   "release_status": "testing",
+   "meta-spec": {
+      "version": "1.0.0",
+      "url": "https://pgxn.org/meta/spec.txt"
+   },
+
+   "tags": [
+      "debug",
+      "diagnostics",
+      "planner",
+      "optimizer",
+      "memory",
+      "path"
+   ]
+}
