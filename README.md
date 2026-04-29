@@ -7,6 +7,19 @@
 PostgreSQL extension that validates the planner's final Path tree, detecting freed or corrupt memory by walking every reachable Path and checking NodeTags.
 Reports and analyses of findings are published on the [project wiki](https://github.com/danolivo/pg_pathcheck/wiki).
 
+## Which branch do I want?
+
+`pg_pathcheck` lives on more than one long-running Git branch. Each branch targets a different PostgreSQL release line; the **user-visible interface (name, GUCs, warning format) is identical across branches** so findings are directly comparable.
+
+| If you run                          | Check out branch                                                                  | Tracks upstream                |
+|-------------------------------------|-----------------------------------------------------------------------------------|--------------------------------|
+| PostgreSQL **17.x** or **18.x**     | [`pg17-18`](https://github.com/danolivo/pg_pathcheck/tree/pg17-18)                | `REL_17_STABLE`, `REL_18_STABLE` |
+| PostgreSQL **master / 19devel**     | [`main`](https://github.com/danolivo/pg_pathcheck/tree/main)                      | `master`                       |
+
+You are reading the `main` branch's README. The implementation diverges from `pg17-18` because the available planner hooks differ between PG versions: `planner_shutdown_hook` and the `extension_state` slot API used here are master-only additions (see the patch in `fixes/`). On master the walker runs in the dedicated shutdown hook after `standard_planner` returns; on 17/18 it is driven inline from `create_upper_paths_hook` at `UPPERREL_FINAL`.
+
+**Coverage caveat between branches.** Because the 17/18 walk fires before `create_plan` and `setrefs.c`, any Path-lifetime bug visible only during those later stages is caught on `main` but not on `pg17-18`. Base-, join- and upper-rel Path generation is complete by `UPPERREL_FINAL` so the bulk of the detection surface is the same on both branches.
+
 ## How it works
 
 The extension uses `create_upper_paths_hook` and `planner_shutdown_hook`. It walks the entire Path tree rooted at the top `PlannerInfo`, then recurses into every subquery subroot reachable via `RelOptInfo::subroot`, every subplan subroot in `PlannerGlobal::subroots`, and every parallel RelOptInfo (`unique_rel`, `grouped_rel`, `part_rels`). For each visited RelOptInfo, it inspects `pathlist`, `partial_pathlist`, `cheapest_parameterized_paths`, and the `cheapest_startup_path` / `cheapest_total_path` singletons. Compound Path nodes embed further Path pointers (`outerjoinpath`/`innerjoinpath`, `subpath`, `subpaths`, `bitmapqual`, ...); the walker descends into each, so a corrupt pointer one level down is still caught.
@@ -30,6 +43,14 @@ Standalone PGXS builds also work:
 cd /path/to/pg_pathcheck
 USE_PGXS=1 PG_CONFIG=/path/to/install/bin/pg_config make install
 ```
+
+The repository also ships a [PGXN](https://pgxn.org/)-ready `META.json`, so once a release is published on the network you will be able to install through [`pgxnclient`](https://pgxn.github.io/pgxnclient/) without cloning:
+
+```bash
+pgxn install pg_pathcheck      # picks the build matching your PostgreSQL version
+```
+
+The release tarball is `pg_pathcheck-<version>.zip`, produced by `make dist`; see [Versioning and releases](#versioning-and-releases) for how it is built.
 
 There is no `CREATE EXTENSION pg_pathcheck`. It registers no SQL objects; its entire effect is through planner hooks activated at library load.
 
@@ -225,6 +246,31 @@ There are two compile-time guards in `pg_pathcheck.c`:
 ## Continuous coverage
 
 The repo ships a GitHub Actions workflow (`.github/workflows/regress.yml`) that runs `make -k check-world` with `pg_pathcheck` loaded on every push to `main`, on every PR, on manual dispatch, and nightly. Artefacts include the raw server logs and a summary written to the job's step-summary panel. Point your fork or extension repo at the same workflow if you would like continuous coverage against PG master as it evolves.
+
+## Versioning and releases
+
+The single source of truth for the version string is `META.json`'s `"version"` field. Two derived strings must be kept in sync with it manually:
+
+| Where                                         | What                                                                              |
+|-----------------------------------------------|-----------------------------------------------------------------------------------|
+| `META.json` → `"version"`                     | canonical (e.g. `"0.9"`)                                                          |
+| `META.json` → `provides.pg_pathcheck.version` | mirror of the canonical                                                           |
+| `pg_pathcheck.c` → `#define PPC_VERSION`      | matches the canonical, advertised through `PG_MODULE_MAGIC_EXT.version`           |
+
+To cut a release on this branch:
+
+1. Edit `META.json` — bump both occurrences of `"version"`.
+2. Edit `pg_pathcheck.c` — bump `PPC_VERSION` to match.
+3. Commit. Tag if you want (e.g. `v0.9.1`).
+4. Run `make dist` (or `USE_PGXS=1 PG_CONFIG=... make dist`).
+
+The `dist` target produces
+
+```
+pg_pathcheck-<version>.zip
+```
+
+This is the master-targeted distribution and carries the canonical numeric version with no branch suffix; the parallel `pg17-18` release adds a `-pg17-18` suffix to its archive filename to disambiguate. The archive is built via `git archive --worktree-attributes` and respects `.gitattributes` `export-ignore` rules — original artwork, internal CI reports, helper scripts, and per-branch CI patches under `fixes/` are not shipped. Typical archive size is around 100 KB.
 
 ## Disclaimer
 
