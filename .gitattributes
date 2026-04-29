@@ -1,0 +1,31 @@
+# Files excluded from `git archive` (i.e., from PGXN distribution
+# tarballs).  All of these are kept in the repository for development
+# but are not useful to end users installing the extension.
+
+# Banner / logo originals.  The README references only
+# pics/banner-readme-dark.jpg (~74 KB); the *-original-* PNG / JPG
+# masters are MB-scale source artwork.
+pics/banner-original*       export-ignore
+pics/logo-original*         export-ignore
+pics/banner-github*         export-ignore
+
+# Project-internal pg_pathcheck finding reports from CI runs.  Useful
+# for project maintainers; uninteresting to anyone installing the
+# extension fresh.
+docs/*-report.txt           export-ignore
+
+# Helper script that aggregates findings out of a check-world run; the
+# script is useful for CI but not for an end-user install.
+scripts/                    export-ignore
+
+# Patches CI applies before building PG.  Not useful to a normal user.
+fixes/                      export-ignore
+
+# Build artefacts that should never end up in a tarball.  These are
+# already .gitignored, so this is belt-and-braces.
+make.log                    export-ignore
+nodetag_names.h             export-ignore
+pathtags_generated.h        export-ignore
+
+# Don't ship our own export rules.
+.gitattributes              export-ignore
