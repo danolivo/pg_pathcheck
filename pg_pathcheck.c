@@ -59,12 +59,14 @@ static set_rel_pathlist_hook_type prev_set_rel_pathlist_hook = NULL;
 /*
  * GUC: pg_pathcheck.elevel
  *		The elevel passed to ereport() when a corrupt Path is detected.
- *		WARNING (default) logs and continues; ERROR aborts the statement;
- *		PANIC crashes the backend so you get a core dump for post-mortem.
+ *		LOG writes to the server log only; WARNING (default) also notifies
+ *		the client and continues; ERROR aborts the statement; PANIC crashes
+ *		the backend so you get a core dump for post-mortem.
  */
 static int	ppc_elevel = WARNING;
 
 static const struct config_enum_entry ppc_elevel_options[] = {
+	{"log", LOG, false},
 	{"warning", WARNING, false},
 	{"error", ERROR, false},
 	{"panic", PANIC, false},
@@ -135,8 +137,10 @@ _PG_init(void)
 {
 	DefineCustomEnumVariable(PPC_NAME ".elevel",
 							 "elevel used when a corrupt Path is detected.",
-							 "WARNING logs and continues, ERROR aborts the "
-							 "statement, PANIC crashes for a core dump.",
+							 "LOG writes to the server log only, WARNING "
+							 "also notifies the client and continues, ERROR "
+							 "aborts the statement, PANIC crashes for a "
+							 "core dump.",
 							 &ppc_elevel,
 							 WARNING,
 							 ppc_elevel_options,
