@@ -701,7 +701,6 @@ walk_path(Path *path, const char *source, List *container,
 		case T_TidPath:
 		case T_TidRangePath:
 		case T_GroupResultPath:
-		case T_MinMaxAggPath:
 			/* No sub-Paths. */
 			break;
 
@@ -800,6 +799,33 @@ walk_path(Path *path, const char *source, List *container,
 			walk_path(((GroupingSetsPath *) path)->subpath,
 					  "GroupingSetsPath.subpath", NULL, rel, root);
 			break;
+		case T_MinMaxAggPath:
+			{
+				/*
+				 * MinMaxAggPath has no top-level Path *, but each
+				 * MinMaxAggInfo on mmaggregates carries an access path
+				 * (the index-scan-with-LIMIT-1 sub-plan that materialises
+				 * one MIN/MAX value) and the PlannerInfo subroot used to
+				 * plan it.  Neither is reachable from glob->subroots
+				 * (preprocess_minmax_aggregates does not register subroots
+				 * there), so we walk them explicitly here.  walk_planner_info
+				 * is idempotent via the visited HTAB, so we can call it
+				 * defensively without worrying about double-traversal.
+				 */
+				MinMaxAggPath *mmap = (MinMaxAggPath *) path;
+				ListCell   *lc;
+
+				foreach(lc, mmap->mmaggregates)
+				{
+					MinMaxAggInfo *info = lfirst_node(MinMaxAggInfo, lc);
+
+					walk_path(info->path, "MinMaxAggInfo.path",
+							  NULL, rel, root);
+					if (info->subroot != NULL)
+						walk_planner_info(info->subroot);
+				}
+			}
+			break;
 		case T_WindowAggPath:
 			walk_path(((WindowAggPath *) path)->subpath,
 					  "WindowAggPath.subpath", NULL, rel, root);
@@ -884,6 +910,8 @@ format_relnames(RelOptInfo *rel, PlannerInfo *root)
 
 	if (rel == NULL || rel->relids == NULL || root == NULL)
 		return "(unknown)";
+	if (!IsA(rel->relids, Bitmapset))
+		return "(invalid relids)";
 
 	initStringInfo(&buf);
 	appendStringInfoChar(&buf, '{');
@@ -1009,9 +1037,9 @@ mark_visited(void *ptr)
  *
  *		All concrete subtypes are listed — even the ones walk_path() treats
  *		as leaves (T_Path, T_IndexPath, T_TidPath, T_TidRangePath,
- *		T_GroupResultPath, T_MinMaxAggPath) — because "no sub-Paths to
- *		descend" is itself a layout claim that can rot if core grows a new
- *		Path * field in one of them.
+ *		T_GroupResultPath) — because "no sub-Paths to descend" is itself a
+ *		layout claim that can rot if core grows a new Path * field in one
+ *		of them.
  *
  *		Limitation: each hash covers only its subtype's own body, not the
  *		bodies of embedded parent structs.  walk_path() reaches into
