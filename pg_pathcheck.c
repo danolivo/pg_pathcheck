@@ -28,7 +28,7 @@
 #include "pathtags_generated.h"
 
 #define PPC_NAME	"pg_pathcheck"
-#define PPC_VERSION	"0.9.1"
+#define PPC_VERSION	"0.9.1_pg17-18"
 
 /*
  * Common errhint() clause: every finding wants the triggering query in the
