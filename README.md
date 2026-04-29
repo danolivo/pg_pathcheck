@@ -4,7 +4,7 @@
 
 # pg_pathcheck
 
-PostgreSQL extension that validates the planner's final Path tree, detecting freed or corrupt memory by walking every reachable Path and checking NodeTags.
+PostgreSQL extension that validates the planner's Path tree, detecting freed or corrupt memory by walking every reachable Path and checking NodeTags.
 Reports and analyses of findings are published on the [project wiki](https://github.com/danolivo/pg_pathcheck/wiki).
 
 ## Which branch do I want?
@@ -16,7 +16,7 @@ Reports and analyses of findings are published on the [project wiki](https://git
 | PostgreSQL **17.x** or **18.x**     | [`pg17-18`](https://github.com/danolivo/pg_pathcheck/tree/pg17-18)                | `REL_17_STABLE`, `REL_18_STABLE` |
 | PostgreSQL **master / 19devel**     | [`main`](https://github.com/danolivo/pg_pathcheck/tree/main)                      | `master`                       |
 
-You are reading the `main` branch's README. The implementation diverges from `pg17-18` because the available planner hooks differ between PG versions: `planner_shutdown_hook` and the `extension_state` slot API used here are master-only additions (see the patch in `fixes/`). On master the walker runs in the dedicated shutdown hook after `standard_planner` returns; on 17/18 it is driven inline from `create_upper_paths_hook` at `UPPERREL_FINAL`.
+The implementation diverges from `pg17-18` because the available planner hooks differ between PG versions: `planner_shutdown_hook` and the `extension_state` slot API used here are master-only additions (see the patch in `fixes/`). On master the walker runs in the dedicated shutdown hook after `standard_planner` returns; on 17/18 it is driven inline from `create_upper_paths_hook` at `UPPERREL_FINAL`.
 
 **Coverage caveat between branches.** Because the 17/18 walk fires before `create_plan` and `setrefs.c`, any Path-lifetime bug visible only during those later stages is caught on `main` but not on `pg17-18`. Base-, join- and upper-rel Path generation is complete by `UPPERREL_FINAL` so the bulk of the detection surface is the same on both branches.
 
@@ -32,7 +32,7 @@ The `pg_pathcheck` targets **PostgreSQL master**. Since it is a pure module with
 
 ```bash
 ./configure --prefix=/path/to/install \
-    --enable-cassert --enable-debug --enable-injection-points
+    --enable-cassert --enable-debug
 ```
 
 The cleanest way to build and install the extension is in-tree, so that `make install` carries it into `$libdir` alongside core.
@@ -96,7 +96,8 @@ TEMP_CONFIG=/tmp/ppc.conf \
 ### `pg_pathcheck.elevel` — report elevel
 
 ```sql
-SET pg_pathcheck.elevel = 'warning';  -- default, log and keep going
+SET pg_pathcheck.elevel = 'warning';  -- default, complain and keep going
+SET pg_pathcheck.elevel = 'log';  -- log and keep going
 SET pg_pathcheck.elevel = 'error';    -- abort the offending statement
 SET pg_pathcheck.elevel = 'panic';    -- PANIC → core dump
 ```
@@ -112,7 +113,7 @@ SET pg_pathcheck.stage_checks = on;   -- walk pathlists at every hook boundary
 
 By default only the end-of-planning walker runs (at `planner_shutdown_hook`). That catches corruption but tells you nothing about *when* during planning it happened.
 
-Turning `stage_checks` on adds three extra tripwires that fire during planning:
+Turning `stage_checks` on adds three extra hooks that fire during planning:
 
 | Hook | Fires at | Pins a finding to |
 |---|---|---|
@@ -120,7 +121,7 @@ Turning `stage_checks` on adds three extra tripwires that fire during planning:
 | `set_join_pathlist_hook` | end of `populate_joinrel_with_paths()` | join-rel construction |
 | `create_upper_paths_hook` | end of each `UPPERREL_*` stage | a specific upper-rel stage (ordering, grouping, distinct, …) |
 
-Each tripwire checks every entry in the affected rel's `pathlist` / `partial_pathlist` for a valid Path NodeTag and — for base/join rels — a matching `->parent`. A finding carries a short context string (`"base rel"`, `"outer side of join rel {a,b}"`, `"create_upper_paths input, stage UPPERREL_ORDERED"`) that identifies which hook caught it.
+Each hook checks every entry in the affected rel's `pathlist` / `partial_pathlist` for a valid Path NodeTag and — for base/join rels — a matching `->parent`. A finding carries a short context string (`"base rel"`, `"outer side of join rel {a,b}"`, `"create_upper_paths input, stage UPPERREL_ORDERED"`) that identifies which hook caught it.
 
 Combine with `elevel = 'error'` to halt on the first earliest-firing finding:
 
@@ -159,38 +160,6 @@ HINT:     query: ...
 ```
 
 Here the NodeTag is a legitimate Path, but `path->parent` does not match the rel whose list was being walked — the slot was freed, and a new Path belonging to another rel now sits there.
-
-## Collecting findings across a large test run
-
-After a `make check-world`, warnings are scattered across dozens of `tmp_check/log/*.log` files, per-subdir `log/postmaster.log`, `*.out` results, and `regression.diffs`. Use the helper:
-
-```bash
-./scripts/gather-warnings.sh /path/to/pg_src > report.txt
-```
-
-The script produces two sections:
-
-1. **Deduplicated DETAIL summary** — groups identical pathlist signatures (addresses normalised, numeric fallback labels collapsed), shows counts and the first log file that recorded each one.
-2. **Parent-mismatch findings** — groups by `(field, target rel, claimed rel)` tuples so aliasing patterns jump out.
-
-A typical line in section 1:
-
-```
-   800  pathlist contents: [0] T_HashPath; [1] T_SeqScan INVALID
-        first seen in: pg_src/src/test/regress/regression.diffs
-```
-
-means 800 occurrences of the same signature were found; opening the indicated `regression.diffs` file will show which test triggered the first one.
-
-## When something fires in your code
-
-If you are running pg_pathcheck against a patch you are writing or an extension you maintain, and it flags something that was not there on the unmodified master:
-
-1. **Find the triggering query.** The `HINT:` line names it; re-run with `SET pg_pathcheck.elevel = 'error'` to get the exact test query that causes the fault.
-2. **Identify the rel and field.** `target rel {a, b} in cheapest_startup_path` names both the RelOptInfo and the specific slot that is stale.
-3. **Use the DETAIL list to reconstruct what should have been there.** The valid siblings in the list are a strong hint about the path type that was originally stored in the bad slot.
-4. **Check your `pfree` / `list_delete_cell` pairing.** Most findings reduce to "I freed a path but did not remove it from the list" or "I kept a pointer to a path across a stage that frees it".
-5. **If the fix is in core planner code**, please share it on pgsql-hackers — this is the wider discussion pg_pathcheck is meant to feed.
 
 ## Bumping PostgreSQL
 
