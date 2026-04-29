@@ -36,7 +36,7 @@
 #include "pathtags_generated.h"
 
 #define PPC_NAME	"pg_pathcheck"
-#define PPC_VERSION	"0.9"
+#define PPC_VERSION	"0.9.1"
 
 PG_MODULE_MAGIC_EXT(
 	.name = PPC_NAME,
