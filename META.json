@@ -1,8 +1,8 @@
 {
 	"name": "pg_pathcheck",
 	"abstract": "Validate planner Path trees for freed/garbage memory.",
-	"description": "pg_pathcheck is a debug aid that walks every Path in a finished query tree and flags freed or alias-recycled nodes via NodeTag and parent-match checks. It is a pure shared-library module loaded via shared_preload_libraries; it registers no SQL objects. This release targets the PostgreSQL master development branch and uses the planner_shutdown_hook plus extension_state slot added by the patch in fixes/.",
-	"version": "0.9.1",
+	"description": "pg_pathcheck is a debug aid that walks every Path in a finished query tree and flags freed or alias-recycled nodes via NodeTag and parent-match checks. It is a pure shared-library module loaded via shared_preload_libraries; it registers no SQL objects. This release targets the PostgreSQL master development branch (19devel): it requires planner_shutdown_hook and the PlannerGlobal extension_state slot API, neither of which exists in 18 or earlier. Use the pg17-18 branch for those releases.",
+	"version": "0.10.0",
 	"maintainer": [
 		"Andrei Lepikhov <andrei.lepikhov@pgedge.com>"
 	],
@@ -11,19 +11,19 @@
 		"pg_pathcheck": {
 			"abstract": "Validate planner Path trees for freed/garbage memory.",
 			"file": "pg_pathcheck.c",
-			"version": "0.9.1",
+			"version": "0.10.0",
 			"docfile": "README.md"
 		}
 	},
 	"prereqs": {
 		"runtime": {
 			"requires": {
-				"PostgreSQL": "18.0.0"
+				"PostgreSQL": "19.0.0"
 			}
 		},
 		"configure": {
 			"requires": {
-				"PostgreSQL": "18.0.0"
+				"PostgreSQL": "19.0.0"
 			}
 		}
 	},

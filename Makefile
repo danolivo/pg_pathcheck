@@ -6,6 +6,8 @@ OBJS = \
 	pg_pathcheck.o
 PGFILEDESC = "pg_pathcheck - validate planner Path trees for freed memory"
 
+TAP_TESTS = 1
+
 EXTRA_CLEAN = nodetag_names.h pathtags_generated.h pg_pathcheck-*.zip make.log
 
 ifdef USE_PGXS
@@ -24,8 +26,11 @@ PATHNODES_H = $(top_srcdir)/src/include/nodes/pathnodes.h
 endif
 
 # Generate a tag-value-to-name lookup table from the server's nodetags.h.
+# The tag-name character class includes digits: a tag we fail to match here
+# gets no entry, and the only symptom is tag_name() printing UNDEF(n) for a
+# perfectly ordinary node -- a silent loss of diagnostic quality.
 nodetag_names.h: $(NODETAGS_H)
-	sed -n 's/^[[:space:]]*\(T_[A-Za-z_]*\) = \([0-9]*\),.*/\t[\2] = "\1",/p' $< > $@
+	sed -n 's/^[[:space:]]*\(T_[A-Za-z0-9_]*\) = \([0-9]*\),.*/\t[\2] = "\1",/p' $< > $@
 
 # Derive the set of concrete Path subtype NodeTags from pathnodes.h and emit
 # a structural hash per subtype.  pg_pathcheck.c consumes this header to
@@ -64,10 +69,34 @@ bless-path-hashes: pathtags_generated.h
 DISTVERSION := $(shell awk -F'"' '/"version":/ {print $$4; exit}' $(srcdir)/META.json)
 DISTNAME := pg_pathcheck-$(DISTVERSION)
 
+# The version string lives in three places by hand (META.json twice, and
+# PPC_VERSION in the C file, which PG_MODULE_MAGIC_EXT advertises).  Releasing
+# an archive whose module reports a different version than its metadata is an
+# easy mistake to make and an annoying one to diagnose, so check before
+# building one.
+.PHONY: check-version
+check-version:
+	@if [ -z "$(DISTVERSION)" ]; then \
+		echo "ERROR: could not extract version from META.json"; exit 1; \
+	fi; \
+	n=$$(grep -c '"version": "$(DISTVERSION)"' $(srcdir)/META.json); \
+	if [ "$$n" -ne 2 ]; then \
+		echo "ERROR: META.json should carry version $(DISTVERSION) twice"; \
+		echo "       (top level and provides.pg_pathcheck), found $$n"; \
+		exit 1; \
+	fi; \
+	c_version=$$(sed -n 's/^#define[[:space:]]*PPC_VERSION[[:space:]]*"\(.*\)".*/\1/p' \
+		$(srcdir)/pg_pathcheck.c); \
+	if [ "$$c_version" != "$(DISTVERSION)" ]; then \
+		echo "ERROR: PPC_VERSION ($$c_version) != META.json version ($(DISTVERSION))"; \
+		exit 1; \
+	fi; \
+	echo "==> version $(DISTVERSION) consistent across META.json and pg_pathcheck.c"
+
 .PHONY: dist dist-pgxn
 dist dist-pgxn: $(DISTNAME).zip
 
-$(DISTNAME).zip: $(srcdir)/META.json
+$(DISTNAME).zip: $(srcdir)/META.json check-version
 	@if ! git -C $(srcdir) rev-parse --is-inside-work-tree >/dev/null 2>&1; then \
 		echo "ERROR: $@ requires a git checkout (uses git archive)"; \
 		exit 1; \
