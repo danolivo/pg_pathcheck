@@ -168,7 +168,8 @@ static const char *ppc_slot_str(const char *listname, int idx);
 static const char *ppc_query_text(void);
 static const char *upper_stage_name(UpperRelationKind stage);
 static void walk_planner_info(PlannerInfo *root);
-static void walk_rel(RelOptInfo *rel, PlannerInfo *root);
+static void walk_rel(RelOptInfo *rel, const char *role, PlannerInfo *root);
+static const char *ppc_qualify(const char *role, const char *slot);
 static void walk_pathlist(List *paths, const char *listname, RelOptInfo *owner,
 						  RelOptInfo *rel, PlannerInfo *root);
 static void walk_path(Path *path, const char *listname, int idx,
@@ -217,9 +218,12 @@ _PG_init(void)
 	MarkGUCPrefixReserved(PPC_NAME);
 
 	/*
-	 * Claim the slot now rather than lazily on first use.  Registering an
-	 * extension ID in the middle of planning would mean the current
-	 * PlannerGlobal's extension_state array was sized before our ID existed.
+	 * Claim the slot at load time.  Doing it lazily on first use would also
+	 * work -- SetPlannerGlobalExtensionState() sizes the array from the ID it
+	 * is handed and repallocs it if a later ID overflows -- but resolving it
+	 * once here removes the sentinel and the per-hook branch that went with
+	 * it.  Note the name is not copied: GetPlannerExtensionId() stores the
+	 * pointer, so it must have static storage duration, as PPC_NAME does.
 	 */
 	ppc_ext_id = GetPlannerExtensionId(PPC_NAME);
 
@@ -407,10 +411,12 @@ ppc_planner_shutdown(PlannerGlobal *glob, Query *parse,
 		(*prev_planner_shutdown_hook) (glob, parse, query_string, pstmt);
 
 	/*
-	 * No finished plan means we were not reached along the ordinary success
-	 * path.  Walking a half-built tree buys little, and raising an error
-	 * from inside error cleanup would turn a diagnostic into a second
-	 * failure, so decline.
+	 * Belt and braces.  Core has one call site for this hook, at the tail of
+	 * standard_planner(), and it always passes the finished PlannedStmt --
+	 * there is no error-path invocation, which is also why raising an error
+	 * from the walk at pg_pathcheck.elevel = 'error' cannot land inside error
+	 * cleanup.  Should that ever change, walking a half-built tree is not
+	 * worth the risk, so decline rather than assume.
 	 */
 	if (pstmt == NULL)
 		return;
@@ -484,7 +490,7 @@ walk_planner_info(PlannerInfo *root)
 	for (i = 0; i < (int) lengthof(root->upper_rels); i++)
 	{
 		foreach_node(RelOptInfo, rel, root->upper_rels[i])
-			walk_rel(rel, root);
+			walk_rel(rel, NULL, root);
 	}
 
 	/* Base rels and appendrel children. */
@@ -496,7 +502,7 @@ walk_planner_info(PlannerInfo *root)
 
 		if (rel == NULL)
 			continue;
-		walk_rel(rel, root);
+		walk_rel(rel, NULL, root);
 		/* Recurse into subquery PlannerInfos. */
 		if (rel->subroot != NULL)
 			walk_planner_info(rel->subroot);
@@ -504,7 +510,7 @@ walk_planner_info(PlannerInfo *root)
 
 	/* Join rels collected during dynamic programming. */
 	foreach_node(RelOptInfo, rel, root->join_rel_list)
-		walk_rel(rel, root);
+		walk_rel(rel, NULL, root);
 
 	/* Non-recursive term of a recursive CTE, if any. */
 	walk_subpath(root->non_recursive_path, "non_recursive_path", NULL, root);
@@ -524,40 +530,78 @@ walk_planner_info(PlannerInfo *root)
  *		anybody -- see walk_subpath().
  */
 static void
-walk_rel(RelOptInfo *rel, PlannerInfo *root)
+walk_rel(RelOptInfo *rel, const char *role, PlannerInfo *root)
 {
 	if (rel == NULL || !mark_visited(rel))
 		return;
 
 	check_stack_depth();
 
-	walk_pathlist(rel->pathlist, "pathlist", rel, rel, root);
-	walk_pathlist(rel->partial_pathlist, "partial_pathlist", rel, rel, root);
+	walk_pathlist(rel->pathlist, ppc_qualify(role, "pathlist"),
+				  rel, rel, root);
+	walk_pathlist(rel->partial_pathlist,
+				  ppc_qualify(role, "partial_pathlist"), rel, rel, root);
 	walk_pathlist(rel->cheapest_parameterized_paths,
-				  "cheapest_parameterized_paths", rel, rel, root);
-	walk_path(rel->cheapest_startup_path, "cheapest_startup_path",
+				  ppc_qualify(role, "cheapest_parameterized_paths"),
+				  rel, rel, root);
+	walk_path(rel->cheapest_startup_path,
+			  ppc_qualify(role, "cheapest_startup_path"),
 			  PPC_NO_INDEX, NIL, rel, rel, root);
-	walk_path(rel->cheapest_total_path, "cheapest_total_path",
+	walk_path(rel->cheapest_total_path,
+			  ppc_qualify(role, "cheapest_total_path"),
 			  PPC_NO_INDEX, NIL, rel, rel, root);
 
 	/*
 	 * Recurse into special RelOptInfos in case their paths are washed out of
 	 * the main pathlist.
+	 *
+	 * These two are built by memcpy()ing the rel they derive from -- see
+	 * build_grouped_rel() and the unique-rel builder in planner.c -- so they
+	 * share its relids *and* its reloptkind.  format_relnames() therefore
+	 * cannot tell them apart from their origin, and neither could a reader of
+	 * the log.  Qualify the slot name instead, which is how the walker already
+	 * carries provenance for sub-paths ("SortPath.subpath").  The role
+	 * composes, so a grouped rel hanging off a unique rel reads as
+	 * "unique_rel.grouped_rel.pathlist".
 	 */
 	if (rel->unique_rel != NULL)
-		walk_rel(rel->unique_rel, root);
+		walk_rel(rel->unique_rel, ppc_qualify(role, "unique_rel"), root);
 	if (rel->grouped_rel != NULL)
-		walk_rel(rel->grouped_rel, root);
+		walk_rel(rel->grouped_rel, ppc_qualify(role, "grouped_rel"), root);
 
-	/* Purely redundant. Just to be paranoid. */
+	/*
+	 * Purely redundant. Just to be paranoid.  Partition rels carry their own
+	 * relids, so they need no role to be identifiable.  Note nparts is -1 on
+	 * a rel whose partitions have not been expanded, which this loop treats
+	 * as empty.
+	 */
 	if (rel->part_rels != NULL)
 	{
 		int			i;
 
 		for (i = 0; i < rel->nparts; i++)
 			if (rel->part_rels[i] != NULL)
-				walk_rel(rel->part_rels[i], root);
+				walk_rel(rel->part_rels[i], role, root);
 	}
+}
+
+
+/*
+ * ppc_qualify
+ *		Prefix a slot name with the role its rel plays, or return the slot
+ *		name unchanged when the rel is being walked in its own right.
+ *
+ *		Returns a palloc'd string in the role case.  That is once per derived
+ *		rel per list, in a module whose whole job is to be slow and careful,
+ *		and the planner context is discarded at end of planning regardless.
+ */
+static const char *
+ppc_qualify(const char *role, const char *slot)
+{
+	if (role == NULL)
+		return slot;
+
+	return psprintf("%s.%s", role, slot);
 }
 
 
@@ -1143,13 +1187,7 @@ format_relnames(RelOptInfo *rel, PlannerInfo *root)
 	if (!IsA(rel->relids, Bitmapset))
 		return "(invalid relids)";
 
-	/*
-	 * A rel name list is a few dozen bytes; the 1kB StringInfo default would
-	 * be almost entirely waste, and this runs up to three times per finding
-	 * into the planner's per-query context, which is not reset until planning
-	 * ends.
-	 */
-	initStringInfoExt(&buf, 64);
+	initStringInfo(&buf);
 	appendStringInfoChar(&buf, '{');
 
 	x = -1;
