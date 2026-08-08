@@ -138,7 +138,7 @@ my @queries = (
 		  'SELECT count(*) FROM t1, t2 WHERE t1.a = t2.a AND t1.a < 5'
 	],
 	[   'MergePath' =>
-		  'SET LOCAL enable_hashjoin = off; SELECT count(*) FROM t1 JOIN t2 USING (a)'
+		  'SET enable_hashjoin = off; SELECT count(*) FROM t1 JOIN t2 USING (a)'
 	],
 	[ 'HashPath'             => 'SELECT count(*) FROM t1 JOIN t2 USING (a)' ],
 	[ 'ProjectionPath'       => 'SELECT a + 1, b * 2 FROM t1 ORDER BY c' ],
@@ -148,7 +148,7 @@ my @queries = (
 		  'SELECT * FROM t1 ORDER BY a, c LIMIT 100'
 	],
 	[   'GroupPath' =>
-		  'SET LOCAL enable_hashagg = off; SELECT b, count(*) FROM t1 GROUP BY b'
+		  'SET enable_hashagg = off; SELECT b, count(*) FROM t1 GROUP BY b'
 	],
 	[ 'UniquePath'           => 'SELECT DISTINCT b FROM t1' ],
 	[ 'AggPath'              => 'SELECT b, count(*) FROM t1 GROUP BY b' ],
@@ -189,10 +189,14 @@ foreach my $stage_checks (qw(off on))
 	{
 		my ($label, $sql) = @$case;
 
+		# on_error_stop is left at its default of 1.  With it turned off
+		# psql exits 0 no matter what the server said, which would make
+		# this assertion compare a constant against a constant -- and
+		# would in particular hide the backend dying mid-script, which is
+		# the failure this whole file exists to catch.
 		my ($qrc, $qout, $qerr) = $node->psql(
 			'postgres',
-			"SET pg_pathcheck.stage_checks = $stage_checks;\n$sql",
-			on_error_stop => 0);
+			"SET pg_pathcheck.stage_checks = $stage_checks;\n$sql");
 
 		is($qrc, 0, "[stage_checks=$stage_checks] $label")
 		  or diag("query: $sql\nstderr: $qerr");
