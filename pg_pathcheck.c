@@ -152,10 +152,10 @@ static void ppc_set_join_pathlist(PlannerInfo *root, RelOptInfo *joinrel,
 								  JoinType jointype, JoinPathExtraData *extra);
 static void ppc_set_rel_pathlist(PlannerInfo *root, RelOptInfo *rel,
 								 Index rti, RangeTblEntry *rte);
-static bool ppc_check_tag(Path *path, const char *listname, int idx,
-						  List *container, RelOptInfo *rel, PlannerInfo *root,
-						  const PpcContext *ctx);
-static void ppc_check_parent(Path *path, RelOptInfo *owner,
+static NodeTag ppc_check_tag(Path *path, const char *listname, int idx,
+							 List *container, RelOptInfo *rel,
+							 PlannerInfo *root, const PpcContext *ctx);
+static void ppc_check_parent(Path *path, NodeTag tag, RelOptInfo *owner,
 							 const char *listname, int idx, List *container,
 							 PlannerInfo *root, const PpcContext *ctx);
 static void ppc_check_pathlist(List *paths, const char *listname,
@@ -256,13 +256,6 @@ ppc_set_join_pathlist(PlannerInfo *root, RelOptInfo *joinrel,
 					  RelOptInfo *outerrel, RelOptInfo *innerrel,
 					  JoinType jointype, JoinPathExtraData *extra)
 {
-	PpcContext	outer_ctx = {.kind = "outer side of join rel",
-		.rel = joinrel,.root = root};
-	PpcContext	inner_ctx = {.kind = "inner side of join rel",
-		.rel = joinrel,.root = root};
-	PpcContext	join_ctx = {.kind = "join rel",
-		.rel = joinrel,.root = root};
-
 	if (prev_set_join_pathlist_hook)
 		(*prev_set_join_pathlist_hook) (root, joinrel, outerrel, innerrel,
 										jointype, extra);
@@ -272,14 +265,28 @@ ppc_set_join_pathlist(PlannerInfo *root, RelOptInfo *joinrel,
 
 	Assert(joinrel != NULL && outerrel != NULL && innerrel != NULL);
 
-	ppc_check_rel_pathlists(outerrel, root, &outer_ctx);
-	ppc_check_rel_pathlists(innerrel, root, &inner_ctx);
-
 	/*
-	 * The join rel's own paths are the freshest thing in sight, so check
-	 * them too rather than only the inputs they were built from.
+	 * Contexts are built inside the guard, not at the top of the function:
+	 * this hook fires once per candidate join pair, which is the DP loop, and
+	 * in the default configuration it must do nothing at all.
 	 */
-	ppc_check_rel_pathlists(joinrel, root, &join_ctx);
+	{
+		PpcContext	outer_ctx = {.kind = "outer side of join rel",
+			.rel = joinrel,.root = root};
+		PpcContext	inner_ctx = {.kind = "inner side of join rel",
+			.rel = joinrel,.root = root};
+		PpcContext	join_ctx = {.kind = "join rel",
+			.rel = joinrel,.root = root};
+
+		ppc_check_rel_pathlists(outerrel, root, &outer_ctx);
+		ppc_check_rel_pathlists(innerrel, root, &inner_ctx);
+
+		/*
+		 * The join rel's own paths are the freshest thing in sight, so check
+		 * them too rather than only the inputs they were built from.
+		 */
+		ppc_check_rel_pathlists(joinrel, root, &join_ctx);
+	}
 }
 
 
@@ -294,7 +301,8 @@ static void
 ppc_set_rel_pathlist(PlannerInfo *root, RelOptInfo *rel, Index rti,
 					 RangeTblEntry *rte)
 {
-	PpcContext	ctx = {.kind = "base rel"};
+	/* Constant: no per-firing work, and nothing to build past the guard. */
+	static const PpcContext ctx = {.kind = "base rel"};
 
 	if (prev_set_rel_pathlist_hook)
 		(*prev_set_rel_pathlist_hook) (root, rel, rti, rte);
@@ -416,6 +424,13 @@ ppc_planner_shutdown(PlannerGlobal *glob, Query *parse,
 	ctl.entrysize = sizeof(void *);
 	ctl.hcxt = CurrentMemoryContext;
 
+	/*
+	 * A single static suffices because this never runs re-entrantly: a nested
+	 * planner() call completes its own shutdown hook, walk and all, before the
+	 * outer planner reaches its own.  Nothing we call below plans a query.
+	 */
+	Assert(visited == NULL);
+
 	visited = hash_create(PPC_NAME " visited", 1024, &ctl,
 						  HASH_ELEM | HASH_BLOBS | HASH_CONTEXT);
 
@@ -423,7 +438,9 @@ ppc_planner_shutdown(PlannerGlobal *glob, Query *parse,
 	 * From here on the static must be cleared on the way out however we
 	 * leave: at elevel 'error' the walk throws, and leaving "visited"
 	 * pointing at a destroyed hash would be a loaded gun for the next
-	 * planner run.
+	 * planner run.  The sigsetjmp() this costs is the savemask == 0 flavour,
+	 * so it is register saves only, no sigprocmask() syscall -- and it is
+	 * reached only once per query that produced a plan.
 	 */
 	PG_TRY();
 	{
@@ -554,18 +571,18 @@ walk_rel(RelOptInfo *rel, PlannerInfo *root)
  *		fails is_path_tag(); with a genuinely reused chunk the odds of
  *		landing on a valid Path tag are vanishingly low.
  */
-static bool
+static NodeTag
 ppc_check_tag(Path *path, const char *listname, int idx, List *container,
 			  RelOptInfo *rel, PlannerInfo *root, const PpcContext *ctx)
 {
 	NodeTag		tag;
 
 	if (path == NULL)
-		return false;
+		return T_Invalid;
 
 	tag = nodeTag(path);
 	if (is_path_tag(tag))
-		return true;
+		return tag;
 
 	ereport(ppc_elevel,
 			errcode(ERRCODE_DATA_CORRUPTED),
@@ -579,7 +596,7 @@ ppc_check_tag(Path *path, const char *listname, int idx, List *container,
 			: errdetail_internal("detected at %s", ppc_context_str(ctx)),
 			errcontext("while planning: %s", ppc_query_text()));
 
-	return false;
+	return T_Invalid;
 }
 
 
@@ -601,8 +618,9 @@ ppc_check_tag(Path *path, const char *listname, int idx, List *container,
  *		upper-rel Path would take, so it must be reported.
  */
 static void
-ppc_check_parent(Path *path, RelOptInfo *owner, const char *listname, int idx,
-				 List *container, PlannerInfo *root, const PpcContext *ctx)
+ppc_check_parent(Path *path, NodeTag tag, RelOptInfo *owner,
+				 const char *listname, int idx, List *container,
+				 PlannerInfo *root, const PpcContext *ctx)
 {
 	RelOptInfo *actual;
 
@@ -610,16 +628,25 @@ ppc_check_parent(Path *path, RelOptInfo *owner, const char *listname, int idx,
 		return;
 
 	/*
+	 * The caller has already validated the tag -- ->parent is not readable
+	 * otherwise -- and hands it over so we neither re-read nodeTag() nor walk
+	 * is_path_tag()'s switch a second time on the walker's hot path.
+	 */
+	Assert(is_path_tag(tag));
+
+	/*
 	 * Upper rels legitimately hold paths whose ->parent is the input rel:
 	 * apply_scanjoin_target_to_paths() and friends install scan/join paths
 	 * directly into the upper rel's lists.  The identity invariant only
 	 * holds for base and join rels.
+	 *
+	 * Note rel->grouped_rel and rel->unique_rel are *not* upper rels -- both
+	 * build_grouped_rel() and the unique-rel builder memcpy() the RelOptInfo
+	 * they derive from, reloptkind included -- so walk_rel() does apply this
+	 * check to them.  That is intended: every path they receive is created
+	 * with the derived rel as its parent (see create_final_unique_paths()).
 	 */
 	if (IS_UPPER_REL(owner))
-		return;
-
-	/* A bogus tag means ->parent is not readable; ppc_check_tag reports it. */
-	if (!is_path_tag(nodeTag(path)))
 		return;
 
 	actual = path->parent;
@@ -639,8 +666,7 @@ ppc_check_parent(Path *path, RelOptInfo *owner, const char *listname, int idx,
 					   ppc_slot_str(listname, idx),
 					   format_relnames(owner, root)),
 				errdetail_internal("detected at %s; path %s",
-								   ppc_context_str(ctx),
-								   tag_name((int) nodeTag(path))),
+								   ppc_context_str(ctx), tag_name((int) tag)),
 				errcontext("while planning: %s", ppc_query_text()));
 		return;
 	}
@@ -655,15 +681,13 @@ ppc_check_parent(Path *path, RelOptInfo *owner, const char *listname, int idx,
 				   ppc_slot_str(listname, idx), format_relnames(owner, root)),
 			container != NIL
 			? errdetail_internal("detected at %s; path %s claims rel %s; rows %.0f, startup_cost %.2f, total_cost %.2f; %s contents: %s",
-								 ppc_context_str(ctx),
-								 tag_name((int) nodeTag(path)),
+								 ppc_context_str(ctx), tag_name((int) tag),
 								 format_relnames(actual, root),
 								 path->rows, path->startup_cost,
 								 path->total_cost,
 								 listname, format_pathlist(container))
 			: errdetail_internal("detected at %s; path %s claims rel %s; rows %.0f, startup_cost %.2f, total_cost %.2f",
-								 ppc_context_str(ctx),
-								 tag_name((int) nodeTag(path)),
+								 ppc_context_str(ctx), tag_name((int) tag),
 								 format_relnames(actual, root),
 								 path->rows, path->startup_cost,
 								 path->total_cost),
@@ -688,9 +712,11 @@ ppc_check_pathlist(List *paths, const char *listname, RelOptInfo *rel,
 	{
 		Path	   *path = (Path *) lfirst(lc);
 		int			idx = foreach_current_index(lc);
+		NodeTag		tag;
 
-		if (ppc_check_tag(path, listname, idx, paths, rel, root, ctx))
-			ppc_check_parent(path, rel, listname, idx, paths, root, ctx);
+		tag = ppc_check_tag(path, listname, idx, paths, rel, root, ctx);
+		if (tag != T_Invalid)
+			ppc_check_parent(path, tag, rel, listname, idx, paths, root, ctx);
 	}
 }
 
@@ -770,15 +796,14 @@ walk_path(Path *path, const char *listname, int idx, List *container,
 
 	check_stack_depth();
 
-	if (!ppc_check_tag(path, listname, idx, container, rel, root, NULL))
+	tag = ppc_check_tag(path, listname, idx, container, rel, root, NULL);
+	if (tag == T_Invalid)
 		return;
 
-	ppc_check_parent(path, owner, listname, idx, container, root, NULL);
+	ppc_check_parent(path, tag, owner, listname, idx, container, root, NULL);
 
 	if (!mark_visited(path))
 		return;
-
-	tag = nodeTag(path);
 
 	/*
 	 * Dive into path tree. It is necessary (most of the time redundant) step
@@ -1076,11 +1101,19 @@ ppc_query_text(void)
 	if (debug_query_string == NULL)
 		return "(none)";
 
-	len = (int) strlen(debug_query_string);
-	if (len <= PPC_MAX_QUERY_LEN)
+	/*
+	 * Bound the scan at the clip length.  A finding fires once per offending
+	 * list element and a check-world run produces tens of thousands of them,
+	 * against machine-generated SQL that can run to hundreds of kilobytes --
+	 * so an unbounded strlen() here makes reporting cost O(statement length x
+	 * findings) for an answer that only depends on the first PPC_MAX_QUERY_LEN
+	 * bytes.
+	 */
+	if (memchr(debug_query_string, '\0', PPC_MAX_QUERY_LEN + 1) != NULL)
 		return debug_query_string;
 
-	len = pg_mbcliplen(debug_query_string, len, PPC_MAX_QUERY_LEN);
+	len = pg_mbcliplen(debug_query_string, PPC_MAX_QUERY_LEN + 1,
+					   PPC_MAX_QUERY_LEN);
 	return psprintf("%.*s...", len, debug_query_string);
 }
 
@@ -1110,7 +1143,13 @@ format_relnames(RelOptInfo *rel, PlannerInfo *root)
 	if (!IsA(rel->relids, Bitmapset))
 		return "(invalid relids)";
 
-	initStringInfo(&buf);
+	/*
+	 * A rel name list is a few dozen bytes; the 1kB StringInfo default would
+	 * be almost entirely waste, and this runs up to three times per finding
+	 * into the planner's per-query context, which is not reset until planning
+	 * ends.
+	 */
+	initStringInfoExt(&buf, 64);
 	appendStringInfoChar(&buf, '{');
 
 	x = -1;
