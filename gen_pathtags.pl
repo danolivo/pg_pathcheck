@@ -6,10 +6,10 @@
 #	  and emit an X-macro header consumed by pg_pathcheck.c.
 #
 #	  A struct S is a Path subtype iff S is "Path" itself, or S's first data
-#	  field has a type that is already a Path subtype.  Structs marked with
-#	  pg_node_attr(abstract) participate in inheritance but do not receive
-#	  their own NodeTag (gen_node_support.pl does the same upstream), so we
-#	  skip emitting X(T_S) for them.
+#	  field embeds, by value, a type that is already a Path subtype.  Structs
+#	  marked with pg_node_attr(abstract) participate in inheritance but do not
+#	  receive their own NodeTag (gen_node_support.pl does the same upstream),
+#	  so we skip emitting X(T_S) for them.
 #
 #	  In addition to PATH_TAG_LIST, we emit a structural hash
 #	  PPC_PATH_HASH_T_<Subtype> for every concrete Path subtype.  The hash
@@ -17,6 +17,15 @@
 #	  invocations and redundant whitespace have been stripped, so cosmetic
 #	  edits do not fire the guard.  Any field addition, removal, rename,
 #	  type change or reordering does.
+#
+#	  Abstract Path subtypes get the same treatment through
+#	  PATH_ABSTRACT_LIST(X) / PPC_PATH_HASH_<Subtype> (no T_ prefix, because
+#	  there is no such NodeTag).  These matter because walk_path() casts a
+#	  concrete node to its abstract parent to reach inherited fields --
+#	  ((JoinPath *) path)->outerjoinpath, say.  A concrete subtype's hash
+#	  covers only the text "JoinPath jpath;", which does not change when
+#	  JoinPath's own body does, so without these the inherited accesses
+#	  would be unguarded.
 #
 # usage:
 #	  perl gen_pathtags.pl <path-to-pathnodes.h> <output-header>
@@ -52,19 +61,34 @@ my %is_abstract;
 my %body_hash;
 my @decl_order;
 
+#
+# One pg_node_attr(...) invocation, tolerating a single level of nested parens
+# (e.g. pg_node_attr(array_size(n))).  The quantifiers are possessive so the
+# pattern cannot backtrack: the naive (?:[^()]*|\([^()]*\))* spelling is an
+# alternation of possibly-empty branches under a star, which degrades to
+# exponential backtracking on a subject that fails to match.
+#
+my $attr_re = qr/pg_node_attr \s* \( (?: [^()]++ | \( [^()]*+ \) )*+ \)/x;
+
 while ($src =~ /typedef \s+ struct \s+ (\w+) \s* \{ ( (?: [^{}]++ | \{[^{}]*\} )* ) \}/gxs)
 {
 	my ($name, $body) = ($1, $2);
 
-	# Remember pg_node_attr(abstract) before we strip annotations away.
-	# Handle one level of nested parens (e.g. pg_node_attr(array_size(n))).
+	# Remember pg_node_attr(abstract) before we strip annotations away.  Only
+	# the struct-level annotation counts, and that one precedes every field,
+	# hence every semicolon; restricting the search that way keeps a
+	# hypothetical field-level attribute mentioning "abstract" from
+	# misclassifying the struct.
+	my ($prelude) = $body =~ /\A ( [^;]* )/xs;
 	$is_abstract{$name} = 1
-		if $body =~ /pg_node_attr \s* \( (?: [^()]* | \([^()]*\) )* \b abstract \b (?: [^()]* | \([^()]*\) )* \)/x;
+		if defined $prelude
+		&& $prelude =~ /($attr_re)/
+		&& $1 =~ /\b abstract \b/x;
 
 	# Remove every pg_node_attr(...) invocation (struct-level and trailing
 	# field-level), so that split-by-semicolon yields clean field declarations
 	# and so that annotation changes do not perturb the structural hash.
-	1 while $body =~ s/pg_node_attr \s* \( (?: [^()]* | \([^()]*\) )* \)//gx;
+	1 while $body =~ s/$attr_re//g;
 
 	# Canonical form for hashing: all whitespace collapsed to single spaces.
 	# Comments are already stripped at file level; pg_node_attr invocations
@@ -85,12 +109,21 @@ while ($src =~ /typedef \s+ struct \s+ (\w+) \s* \{ ( (?: [^{}]++ | \{[^{}]*\} )
 		# we want the first *substantive* struct field.
 		next if $field =~ /^NodeTag\s+type\b/;
 
-		# Match "TypeName [*] fieldname".  TypeName is the first identifier.
-		if ($field =~ /^([A-Za-z_]\w*)\s+\*?\s*[A-Za-z_]\w*/)
-		{
-			$first_type = $1;
-			last;
-		}
+		#
+		# Inheritance in the Node tree is spelled by embedding the parent
+		# struct *by value* as the first substantive field, so accept only
+		# the plain "TypeName fieldname" form here -- no pointer, no array.
+		# A struct whose leading field is "Path *something" is not a Path
+		# subtype, and treating it as one would inject a bogus tag into
+		# PATH_TAG_LIST and thereby widen is_path_tag()'s whitelist, which
+		# is precisely the check we cannot afford to weaken.
+		#
+		# Note we examine the first substantive field and then stop: if it
+		# is not an embedded struct, this type inherits from nothing.
+		#
+		$first_type = $1
+			if $field =~ /^([A-Za-z_]\w*)\s+[A-Za-z_]\w*$/;
+		last;
 	}
 
 	$first_field_type{$name} = $first_type;
@@ -115,8 +148,9 @@ while ($changed)
 	}
 }
 
-# Emit concrete (non-abstract) Path subtypes in declaration order.
-my @emitted = grep { $is_path{$_} && !$is_abstract{$_} } @decl_order;
+# Split Path subtypes into concrete (tagged) and abstract (inherited-from).
+my @emitted  = grep { $is_path{$_} && !$is_abstract{$_} } @decl_order;
+my @abstract = grep { $is_path{$_} && $is_abstract{$_} } @decl_order;
 
 die "$0: no Path subtypes detected in $input — parser broken?\n"
 	if @emitted == 0;
@@ -144,9 +178,14 @@ print $out <<"EOT";
  *				return false;
  *		}
  *
- *	  In addition, PPC_PATH_HASH_T_<Subtype> gives a 64-bit structural
- *	  hash of that subtype's body — stable under cosmetic edits, changes
- *	  on any real field addition/removal/rename/type-change/reorder.
+ *	  PATH_ABSTRACT_LIST(X) expands X(<Subtype>) — no T_ prefix — for the
+ *	  abstract Path subtypes, i.e. the ones that carry a NodeTag only
+ *	  through their concrete descendants.
+ *
+ *	  In addition, PPC_PATH_HASH_T_<Subtype> (concrete) and
+ *	  PPC_PATH_HASH_<Subtype> (abstract) give a 64-bit structural hash of
+ *	  that subtype's body — stable under cosmetic edits, changes on any
+ *	  real field addition/removal/rename/type-change/reorder.
  *	  pg_pathcheck.c cross-checks these against a hand-blessed mirror so
  *	  an upstream layout change fails the build before walk_path() can
  *	  silently miss a new sub-path field.
@@ -165,21 +204,31 @@ for (my $i = 0; $i < @emitted; $i++)
 	print $out "\tX(T_$emitted[$i])$trailer\n";
 }
 
-print $out "\n";
-
-# Longest tag name, so we can align the hash constants for readability.
-my $maxlen = 0;
-for my $name (@emitted)
+print $out "\n#define PATH_ABSTRACT_LIST(X)";
+for (my $i = 0; $i < @abstract; $i++)
 {
-	my $len = length("PPC_PATH_HASH_T_$name");
+	my $trailer = ($i < $#abstract) ? ' \\' : '';
+	print $out " \\\n\tX($abstract[$i])$trailer";
+}
+print $out "\n\n";
+
+# Map each subtype to the macro name its hash is published under, then pad
+# to the longest so the constants line up in the generated header.
+my %symbol;
+$symbol{$_} = "PPC_PATH_HASH_T_$_" for @emitted;
+$symbol{$_} = "PPC_PATH_HASH_$_"   for @abstract;
+
+my $maxlen = 0;
+for my $name (@emitted, @abstract)
+{
+	my $len = length($symbol{$name});
 	$maxlen = $len if $len > $maxlen;
 }
 
-for my $name (@emitted)
+for my $name (@emitted, @abstract)
 {
-	my $symbol = "PPC_PATH_HASH_T_$name";
-	my $pad	   = ' ' x ($maxlen - length($symbol));
-	print $out "#define $symbol$pad 0x$body_hash{$name}ULL\n";
+	my $pad = ' ' x ($maxlen - length($symbol{$name}));
+	print $out "#define $symbol{$name}$pad 0x$body_hash{$name}ULL\n";
 }
 
 print $out "\n#endif\t\t\t\t\t\t\t/* PATHTAGS_GENERATED_H */\n";
