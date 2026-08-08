@@ -9,20 +9,29 @@
  *	  cheapest_*_path, non_recursive_path, and every sub-Path field of every
  *	  compound Path type.  Each visited Path is checked for a valid NodeTag;
  *	  a bogus tag (e.g. the 0x7F bytes from CLOBBER_FREED_MEMORY, or a node
- *	  allocated in a freed slot after pfree) is reported as a WARNING together
- *	  with the relation names resolved from the owning RelOptInfo's relids
- *	  and the full contents of the containing pathlist.
+ *	  allocated in a freed slot after pfree) is reported at
+ *	  pg_pathcheck.elevel together with the relation names resolved from the
+ *	  owning RelOptInfo's relids and the full contents of the containing
+ *	  pathlist.
  *
  *	  planner_shutdown_hook is not handed the top PlannerInfo directly, so we
  *	  stash it from create_upper_paths_hook into PlannerGlobal->extension_state.
  *	  That slot lives in the planner's per-query context and is reclaimed on
  *	  both normal exit and elog(ERROR), so nothing to clean up ourselves.
  *
+ *	  Everything here runs on memory we already suspect of being corrupt, so
+ *	  the house rule is: validate before dereferencing, and never abort.  A
+ *	  diagnostic tool that Assert()s its way out of an unexpected state takes
+ *	  down the very run it was supposed to explain -- and the cassert build
+ *	  this module is meant to be used with is where that hurts most.
+ *
  *-------------------------------------------------------------------------
  */
 #include "postgres.h"
 
 #include "fmgr.h"
+#include "lib/stringinfo.h"
+#include "mb/pg_wchar.h"
 #include "miscadmin.h"
 #include "nodes/pathnodes.h"
 #include "optimizer/extendplan.h"
@@ -31,12 +40,23 @@
 #include "tcop/tcopprot.h"
 #include "utils/guc.h"
 #include "utils/hsearch.h"
-#include "utils/memutils.h"
 
 #include "pathtags_generated.h"
 
 #define PPC_NAME	"pg_pathcheck"
-#define PPC_VERSION	"0.9.1"
+#define PPC_VERSION	"0.10.0"
+
+/*
+ * Caps on the diagnostic strings we build.  Both exist because a finding
+ * fires once per offending list element: an uncapped dump of a wholly
+ * clobbered pathlist is quadratic in the list length, and debug_query_string
+ * can be megabytes of generated SQL.
+ */
+#define PPC_MAX_LIST_DUMP	20
+#define PPC_MAX_QUERY_LEN	1024
+
+/* Passed as the "idx" argument for a Path held in a scalar slot. */
+#define PPC_NO_INDEX		(-1)
 
 PG_MODULE_MAGIC_EXT(
 	.name = PPC_NAME,
@@ -51,7 +71,7 @@ static planner_shutdown_hook_type prev_planner_shutdown_hook = NULL;
 static set_join_pathlist_hook_type prev_set_join_pathlist_hook = NULL;
 static set_rel_pathlist_hook_type prev_set_rel_pathlist_hook = NULL;
 
-/* Lazily resolved ID for our extension_state slot on PlannerGlobal. */
+/* ID of our extension_state slot on PlannerGlobal; assigned in _PG_init. */
 static int	ppc_ext_id = -1;
 
 /*
@@ -60,6 +80,11 @@ static int	ppc_ext_id = -1;
  *		LOG writes to the server log only; WARNING (default) also notifies
  *		the client and continues; ERROR aborts the statement; PANIC crashes
  *		the backend so you get a core dump for post-mortem.
+ *
+ *		PGC_SUSET, not PGC_USERSET: PANIC takes down the whole cluster, not
+ *		just the session that asked for it, and findings are easy to provoke
+ *		from ordinary SQL.  Letting an unprivileged user arm that would hand
+ *		them a restart button.
  */
 static int	ppc_elevel = WARNING;
 
@@ -93,6 +118,29 @@ static bool ppc_stage_checks = false;
  */
 static HTAB *visited = NULL;
 
+/*
+ * PpcContext
+ *		Which call site asked for this check, formatted only if something is
+ *		actually reported.
+ *
+ *		The stage hooks fire on every base rel, every join pair and every
+ *		upper-rel stage of every query.  Building "outer side of join rel
+ *		{a, b}" eagerly would psprintf() and initStringInfo() -- a kilobyte
+ *		a time, into the planner's per-query context -- on every firing,
+ *		whether or not a finding ever materialises.  So keep the pieces and
+ *		assemble them in ppc_context_str(), which only the reporting paths
+ *		call.
+ *
+ *		A NULL PpcContext * means the end-of-planning walker.
+ */
+typedef struct PpcContext
+{
+	const char *kind;			/* constant description; never NULL */
+	const char *detail;			/* constant suffix, or NULL */
+	RelOptInfo *rel;			/* rel whose name follows kind, or NULL */
+	PlannerInfo *root;			/* root used to resolve rel's relids */
+} PpcContext;
+
 /* Forward declarations. */
 static void ppc_create_upper_paths(PlannerInfo *root, UpperRelationKind stage,
 								   RelOptInfo *input_rel, RelOptInfo *output_rel,
@@ -104,21 +152,30 @@ static void ppc_set_join_pathlist(PlannerInfo *root, RelOptInfo *joinrel,
 								  JoinType jointype, JoinPathExtraData *extra);
 static void ppc_set_rel_pathlist(PlannerInfo *root, RelOptInfo *rel,
 								 Index rti, RangeTblEntry *rte);
-static void check_rel_pathlists(RelOptInfo *rel, const char *ctx,
-								PlannerInfo *root);
-static void check_rel_pathlist(List *paths, const char *listname,
-							   RelOptInfo *rel, const char *ctx,
-							   PlannerInfo *root);
+static bool ppc_check_tag(Path *path, const char *listname, int idx,
+						  List *container, RelOptInfo *rel, PlannerInfo *root,
+						  const PpcContext *ctx);
+static void ppc_check_parent(Path *path, RelOptInfo *owner,
+							 const char *listname, int idx, List *container,
+							 PlannerInfo *root, const PpcContext *ctx);
+static void ppc_check_pathlist(List *paths, const char *listname,
+							   RelOptInfo *rel, PlannerInfo *root,
+							   const PpcContext *ctx);
+static void ppc_check_rel_pathlists(RelOptInfo *rel, PlannerInfo *root,
+									const PpcContext *ctx);
+static const char *ppc_context_str(const PpcContext *ctx);
+static const char *ppc_slot_str(const char *listname, int idx);
+static const char *ppc_query_text(void);
 static const char *upper_stage_name(UpperRelationKind stage);
 static void walk_planner_info(PlannerInfo *root);
 static void walk_rel(RelOptInfo *rel, PlannerInfo *root);
-static void walk_pathlist(List *paths, const char *listname,
+static void walk_pathlist(List *paths, const char *listname, RelOptInfo *owner,
 						  RelOptInfo *rel, PlannerInfo *root);
-static void walk_path(Path *path, const char *source, List *container,
-					   RelOptInfo *rel, PlannerInfo *root);
-static void verify_path_parent(Path *path, RelOptInfo *expected,
-							   const char *source, List *container,
-							   PlannerInfo *root);
+static void walk_path(Path *path, const char *listname, int idx,
+					  List *container, RelOptInfo *owner, RelOptInfo *rel,
+					  PlannerInfo *root);
+static void walk_subpath(Path *path, const char *source, RelOptInfo *rel,
+						 PlannerInfo *root);
 static bool mark_visited(void *ptr);
 static bool is_path_tag(NodeTag tag);
 static const char *tag_name(int tag);
@@ -128,7 +185,7 @@ static const char *format_pathlist(List *paths);
 
 /*
  * _PG_init
- *		Chain onto the two planner hooks we need.
+ *		Chain onto the planner hooks we need and claim our extension_state slot.
  */
 void
 _PG_init(void)
@@ -142,7 +199,7 @@ _PG_init(void)
 							 &ppc_elevel,
 							 WARNING,
 							 ppc_elevel_options,
-							 PGC_USERSET,
+							 PGC_SUSET,
 							 0,
 							 NULL, NULL, NULL);
 
@@ -158,6 +215,13 @@ _PG_init(void)
 							 NULL, NULL, NULL);
 
 	MarkGUCPrefixReserved(PPC_NAME);
+
+	/*
+	 * Claim the slot now rather than lazily on first use.  Registering an
+	 * extension ID in the middle of planning would mean the current
+	 * PlannerGlobal's extension_state array was sized before our ID existed.
+	 */
+	ppc_ext_id = GetPlannerExtensionId(PPC_NAME);
 
 	prev_create_upper_paths_hook = create_upper_paths_hook;
 	create_upper_paths_hook = ppc_create_upper_paths;
@@ -192,6 +256,13 @@ ppc_set_join_pathlist(PlannerInfo *root, RelOptInfo *joinrel,
 					  RelOptInfo *outerrel, RelOptInfo *innerrel,
 					  JoinType jointype, JoinPathExtraData *extra)
 {
+	PpcContext	outer_ctx = {.kind = "outer side of join rel",
+		.rel = joinrel,.root = root};
+	PpcContext	inner_ctx = {.kind = "inner side of join rel",
+		.rel = joinrel,.root = root};
+	PpcContext	join_ctx = {.kind = "join rel",
+		.rel = joinrel,.root = root};
+
 	if (prev_set_join_pathlist_hook)
 		(*prev_set_join_pathlist_hook) (root, joinrel, outerrel, innerrel,
 										jointype, extra);
@@ -201,15 +272,14 @@ ppc_set_join_pathlist(PlannerInfo *root, RelOptInfo *joinrel,
 
 	Assert(joinrel != NULL && outerrel != NULL && innerrel != NULL);
 
-	{
-		char	   *outer_ctx = psprintf("outer side of join rel %s",
-										 format_relnames(joinrel, root));
-		char	   *inner_ctx = psprintf("inner side of join rel %s",
-										 format_relnames(joinrel, root));
+	ppc_check_rel_pathlists(outerrel, root, &outer_ctx);
+	ppc_check_rel_pathlists(innerrel, root, &inner_ctx);
 
-		check_rel_pathlists(outerrel, outer_ctx, root);
-		check_rel_pathlists(innerrel, inner_ctx, root);
-	}
+	/*
+	 * The join rel's own paths are the freshest thing in sight, so check
+	 * them too rather than only the inputs they were built from.
+	 */
+	ppc_check_rel_pathlists(joinrel, root, &join_ctx);
 }
 
 
@@ -224,6 +294,8 @@ static void
 ppc_set_rel_pathlist(PlannerInfo *root, RelOptInfo *rel, Index rti,
 					 RangeTblEntry *rte)
 {
+	PpcContext	ctx = {.kind = "base rel"};
+
 	if (prev_set_rel_pathlist_hook)
 		(*prev_set_rel_pathlist_hook) (root, rel, rti, rte);
 
@@ -232,94 +304,17 @@ ppc_set_rel_pathlist(PlannerInfo *root, RelOptInfo *rel, Index rti,
 
 	Assert(rel != NULL);
 
-	check_rel_pathlists(rel, "base rel", root);
-}
-
-
-/*
- * check_rel_pathlists
- *		Check both pathlist and partial_pathlist of one rel.  ctx is a short
- *		free-form string appended to every finding to describe the call site
- *		("base rel", "outer side of join rel {a,b}", etc.) so a developer
- *		can correlate findings with a specific planner step.
- */
-static void
-check_rel_pathlists(RelOptInfo *rel, const char *ctx, PlannerInfo *root)
-{
-	check_rel_pathlist(rel->pathlist, "pathlist", rel, ctx, root);
-	check_rel_pathlist(rel->partial_pathlist, "partial_pathlist",
-					   rel, ctx, root);
-}
-
-
-/*
- * check_rel_pathlist
- *		Validate every Path pointer in one list owned by rel.  Two failure
- *		modes:
- *		  (a) the entry's NodeTag is not a Path-family tag — the chunk has
- *		      been freed or overwritten (dangling pointer);
- *		  (b) the entry carries a valid Path tag but ->parent does not
- *		      match the owning rel — same-size-class aliasing, the slot
- *		      has been re-claimed by a Path of a different rel.
- */
-static void
-check_rel_pathlist(List *paths, const char *listname, RelOptInfo *rel,
-				   const char *ctx, PlannerInfo *root)
-{
-	ListCell   *lc;
-
-	foreach(lc, paths)
-	{
-		Path	   *p = (Path *) lfirst(lc);
-		NodeTag		tag;
-		int			i = foreach_current_index(lc);
-
-		if (p == NULL)
-			continue;
-
-		tag = nodeTag(p);
-		if (!is_path_tag(tag))
-		{
-			ereport(ppc_elevel,
-					errmsg(PPC_NAME ": dangling pointer at %s[%d], rel %s (%s)",
-						   listname, i,
-						   format_relnames(rel, root), ctx),
-					errdetail("invalid NodeTag %s; %s contents: %s",
-							  tag_name((int) tag), listname,
-							  format_pathlist(paths)),
-					errhint("query: %s",
-							debug_query_string ? debug_query_string : "(null)"));
-			continue;
-		}
-
-		/*
-		 * Upper rels legitimately hold paths whose ->parent is the input
-		 * rel (apply_scanjoin_target_to_paths and similar), so the
-		 * identity check only applies to base and join rels.
-		 */
-		if (!IS_UPPER_REL(rel) && p->parent != rel)
-		{
-			RelOptInfo *actual = p->parent;
-
-			ereport(ppc_elevel,
-					errmsg(PPC_NAME ": path parent mismatch at %s[%d], rel %s (%s)",
-						   listname, i,
-						   format_relnames(rel, root), ctx),
-					errdetail("path %s claims rel %s",
-							  tag_name((int) tag),
-							  (actual != NULL && IsA(actual, RelOptInfo))
-							  ? format_relnames(actual, root)
-							  : "(garbage)"),
-					errhint("query: %s",
-							debug_query_string ? debug_query_string : "(null)"));
-		}
-	}
+	ppc_check_rel_pathlists(rel, root, &ctx);
 }
 
 
 /*
  * upper_stage_name
  *		Symbolic name for an UpperRelationKind value, for diagnostics.
+ *
+ *		Deliberately no default arm: -Wswitch then flags a new upstream
+ *		UpperRelationKind here, which is also a cue to re-check the
+ *		upper_rels[] loop in walk_planner_info().
  */
 static const char *
 upper_stage_name(UpperRelationKind stage)
@@ -362,8 +357,7 @@ ppc_create_upper_paths(PlannerInfo *root, UpperRelationKind stage,
 	/* (1) stash top root so planner_shutdown_hook can find it */
 	if (root->parent_root == NULL && stage == UPPERREL_FINAL)
 	{
-		if (ppc_ext_id < 0)
-			ppc_ext_id = GetPlannerExtensionId(PPC_NAME);
+		Assert(ppc_ext_id >= 0);
 		SetPlannerGlobalExtensionState(root->glob, ppc_ext_id, root);
 	}
 
@@ -371,13 +365,15 @@ ppc_create_upper_paths(PlannerInfo *root, UpperRelationKind stage,
 	if (ppc_stage_checks)
 	{
 		const char *sname = upper_stage_name(stage);
-		char	   *in_ctx = psprintf("create_upper_paths input, stage %s", sname);
-		char	   *out_ctx = psprintf("create_upper_paths output, stage %s", sname);
+		PpcContext	in_ctx = {.kind = "create_upper_paths input, stage",
+			.detail = sname};
+		PpcContext	out_ctx = {.kind = "create_upper_paths output, stage",
+			.detail = sname};
 
 		if (input_rel != NULL)
-			check_rel_pathlists(input_rel, in_ctx, root);
+			ppc_check_rel_pathlists(input_rel, root, &in_ctx);
 		if (output_rel != NULL)
-			check_rel_pathlists(output_rel, out_ctx, root);
+			ppc_check_rel_pathlists(output_rel, root, &out_ctx);
 	}
 }
 
@@ -391,42 +387,65 @@ ppc_planner_shutdown(PlannerGlobal *glob, Query *parse,
 					 const char *query_string, PlannedStmt *pstmt)
 {
 	PlannerInfo *top_root;
+	HASHCTL		ctl = {0};
 
-	if (ppc_ext_id >= 0 &&
-		(top_root = GetPlannerGlobalExtensionState(glob, ppc_ext_id)) != NULL)
+	/*
+	 * Run the chained hook before we do anything.  Our walk can throw at
+	 * pg_pathcheck.elevel = 'error', and an extension that loaded before us
+	 * should not lose its shutdown callback just because we found a corrupt
+	 * Path.
+	 */
+	if (prev_planner_shutdown_hook)
+		(*prev_planner_shutdown_hook) (glob, parse, query_string, pstmt);
+
+	/*
+	 * No finished plan means we were not reached along the ordinary success
+	 * path.  Walking a half-built tree buys little, and raising an error
+	 * from inside error cleanup would turn a diagnostic into a second
+	 * failure, so decline.
+	 */
+	if (pstmt == NULL)
+		return;
+
+	Assert(ppc_ext_id >= 0);
+	top_root = GetPlannerGlobalExtensionState(glob, ppc_ext_id);
+	if (top_root == NULL)
+		return;
+
+	ctl.keysize = sizeof(void *);
+	ctl.entrysize = sizeof(void *);
+	ctl.hcxt = CurrentMemoryContext;
+
+	visited = hash_create(PPC_NAME " visited", 1024, &ctl,
+						  HASH_ELEM | HASH_BLOBS | HASH_CONTEXT);
+
+	/*
+	 * From here on the static must be cleared on the way out however we
+	 * leave: at elevel 'error' the walk throws, and leaving "visited"
+	 * pointing at a destroyed hash would be a loaded gun for the next
+	 * planner run.
+	 */
+	PG_TRY();
 	{
-		HASHCTL		ctl = {0};
-
-		ctl.keysize = sizeof(void *);
-		ctl.entrysize = sizeof(void *);
-		ctl.hcxt = CurrentMemoryContext;
-
-		/*
-		 * Do not care about previous value of the pointer. It might stay
-		 * initialized in case of previous internal error. But memory already
-		 * freed because of transactional memory context.
-		 */
-		visited = hash_create(PPC_NAME " visited", 1024, &ctl,
-							  HASH_ELEM | HASH_BLOBS | HASH_CONTEXT);
-
 		walk_planner_info(top_root);
 
 		/* Subplan PlannerInfos and their backing top-level Paths. */
-		foreach_node(PlannerInfo, root, glob->subroots)
-			walk_planner_info(root);
+		foreach_node(PlannerInfo, subroot, glob->subroots)
+			walk_planner_info(subroot);
 
 		/*
 		 * Deliberately duplicated crawler - just to find potential
-		 * low-probability discrepancies or dangled pointers in this list itself
+		 * low-probability discrepancies or dangled pointers in this list
+		 * itself.  No owning rel, so no parent-identity claim to make.
 		 */
-		walk_pathlist(glob->subpaths, "glob->subpaths", NULL, top_root);
-
+		walk_pathlist(glob->subpaths, "glob->subpaths", NULL, NULL, top_root);
+	}
+	PG_FINALLY();
+	{
 		hash_destroy(visited);
 		visited = NULL;
 	}
-
-	if (prev_planner_shutdown_hook)
-		(*prev_planner_shutdown_hook) (glob, parse, query_string, pstmt);
+	PG_END_TRY();
 }
 
 
@@ -445,7 +464,7 @@ walk_planner_info(PlannerInfo *root)
 	check_stack_depth();
 
 	/* Upper rels: one List per UpperRelationKind. */
-	for (i = 0; i <= UPPERREL_FINAL; i++)
+	for (i = 0; i < (int) lengthof(root->upper_rels); i++)
 	{
 		foreach_node(RelOptInfo, rel, root->upper_rels[i])
 			walk_rel(rel, root);
@@ -471,8 +490,7 @@ walk_planner_info(PlannerInfo *root)
 		walk_rel(rel, root);
 
 	/* Non-recursive term of a recursive CTE, if any. */
-	walk_path(root->non_recursive_path, "non_recursive_path", NULL,
-			  NULL, root);
+	walk_subpath(root->non_recursive_path, "non_recursive_path", NULL, root);
 }
 
 
@@ -482,50 +500,28 @@ walk_planner_info(PlannerInfo *root)
  *		RelOptInfos that hang off it (unique_rel, grouped_rel, part_rels[]).
  *		Upward links (parent / top_parent) are intentionally not followed:
  *		those rels are reached via simple_rel_array or join_rel_list anyway.
+ *
+ *		Every list below is passed with rel as its "owner", so walk_path()
+ *		additionally asserts the parent-identity invariant on each element.
+ *		Sub-path lists reached from inside a compound Path are not owned by
+ *		anybody -- see walk_subpath().
  */
 static void
 walk_rel(RelOptInfo *rel, PlannerInfo *root)
 {
-	ListCell   *lc;
-
 	if (rel == NULL || !mark_visited(rel))
 		return;
 
-	/*
-	 * Parent-match check for every Path directly attached to this rel.
-	 * If a slot has been reused by a Path built for another rel
-	 * (same-size-class aliasing that survives the NodeTag check), the
-	 * reused Path's ->parent points to its real owner, not to us.
-	 *
-	 * Skip upper rels: their pathlists legitimately carry paths whose
-	 * ->parent is the input rel (see apply_scanjoin_target_to_paths and
-	 * similar).  The invariant only holds for base and join rels.
-	 */
-	if (!IS_UPPER_REL(rel))
-	{
-		foreach(lc, rel->pathlist)
-			verify_path_parent(lfirst(lc), rel, "pathlist",
-							   rel->pathlist, root);
-		foreach(lc, rel->partial_pathlist)
-			verify_path_parent(lfirst(lc), rel, "partial_pathlist",
-							   rel->partial_pathlist, root);
-		foreach(lc, rel->cheapest_parameterized_paths)
-			verify_path_parent(lfirst(lc), rel, "cheapest_parameterized_paths",
-							   rel->cheapest_parameterized_paths, root);
-		verify_path_parent(rel->cheapest_startup_path, rel,
-						   "cheapest_startup_path", NULL, root);
-		verify_path_parent(rel->cheapest_total_path, rel,
-						   "cheapest_total_path", NULL, root);
-	}
+	check_stack_depth();
 
-	walk_pathlist(rel->pathlist, "pathlist", rel, root);
-	walk_pathlist(rel->partial_pathlist, "partial_pathlist", rel, root);
+	walk_pathlist(rel->pathlist, "pathlist", rel, rel, root);
+	walk_pathlist(rel->partial_pathlist, "partial_pathlist", rel, rel, root);
 	walk_pathlist(rel->cheapest_parameterized_paths,
-				  "cheapest_parameterized_paths", rel, root);
-	walk_path(rel->cheapest_startup_path, "cheapest_startup_path", NULL,
-			  rel, root);
-	walk_path(rel->cheapest_total_path, "cheapest_total_path", NULL,
-			  rel, root);
+				  "cheapest_parameterized_paths", rel, rel, root);
+	walk_path(rel->cheapest_startup_path, "cheapest_startup_path",
+			  PPC_NO_INDEX, NIL, rel, rel, root);
+	walk_path(rel->cheapest_total_path, "cheapest_total_path",
+			  PPC_NO_INDEX, NIL, rel, rel, root);
 
 	/*
 	 * Recurse into special RelOptInfos in case their paths are washed out of
@@ -539,7 +535,7 @@ walk_rel(RelOptInfo *rel, PlannerInfo *root)
 	/* Purely redundant. Just to be paranoid. */
 	if (rel->part_rels != NULL)
 	{
-		int	i;
+		int			i;
 
 		for (i = 0; i < rel->nparts; i++)
 			if (rel->part_rels[i] != NULL)
@@ -549,119 +545,223 @@ walk_rel(RelOptInfo *rel, PlannerInfo *root)
 
 
 /*
- * verify_path_parent
- *		Confirm that a Path found directly on rel's own pathlist-family
- *		fields actually claims rel as its parent.  A mismatch catches the
+ * ppc_check_tag
+ *		Validate a Path pointer's NodeTag, the main "is this memory still a
+ *		Path" probe.  Returns true when the tag is a live Path-family tag,
+ *		false for NULL or for anything else -- having reported the latter.
+ *
+ *		With CLOBBER_FREED_MEMORY a freed chunk reads as 0x7F7F7F7F, which
+ *		fails is_path_tag(); with a genuinely reused chunk the odds of
+ *		landing on a valid Path tag are vanishingly low.
+ */
+static bool
+ppc_check_tag(Path *path, const char *listname, int idx, List *container,
+			  RelOptInfo *rel, PlannerInfo *root, const PpcContext *ctx)
+{
+	NodeTag		tag;
+
+	if (path == NULL)
+		return false;
+
+	tag = nodeTag(path);
+	if (is_path_tag(tag))
+		return true;
+
+	ereport(ppc_elevel,
+			errcode(ERRCODE_DATA_CORRUPTED),
+			errmsg(PPC_NAME ": invalid NodeTag %s in %s, rel %s",
+				   tag_name((int) tag), ppc_slot_str(listname, idx),
+				   format_relnames(rel, root)),
+			container != NIL
+			? errdetail_internal("detected at %s; %s contents: %s",
+								 ppc_context_str(ctx), listname,
+								 format_pathlist(container))
+			: errdetail_internal("detected at %s", ppc_context_str(ctx)),
+			errcontext("while planning: %s", ppc_query_text()));
+
+	return false;
+}
+
+
+/*
+ * ppc_check_parent
+ *		Confirm that a Path found in one of owner's own pathlist-family
+ *		slots actually claims owner as its parent.  A mismatch catches the
  *		aliasing case that escapes the NodeTag check: the memory chunk was
  *		freed and re-allocated as a different Path (possibly belonging to
  *		another rel) within the same planning session.
  *
- *		Called only from walk_rel, never from the sub-path recursion —
- *		inside compound Path nodes the parent legitimately varies (e.g.,
- *		JoinPath.outerjoinpath belongs to the child rel, not the join rel).
+ *		owner is NULL for Paths reached from inside a compound Path, where
+ *		the parent legitimately varies (JoinPath.outerjoinpath belongs to
+ *		the child rel, not the join rel), and for lists that no rel owns.
+ *
+ *		Note there is no exemption for the case "owner is a base or join
+ *		rel but the path claims an upper rel".  That configuration has no
+ *		legitimate producer in core, and it is exactly the shape a recycled
+ *		upper-rel Path would take, so it must be reported.
  */
 static void
-verify_path_parent(Path *path, RelOptInfo *expected, const char *source,
-				   List *container, PlannerInfo *root)
+ppc_check_parent(Path *path, RelOptInfo *owner, const char *listname, int idx,
+				 List *container, PlannerInfo *root, const PpcContext *ctx)
 {
 	RelOptInfo *actual;
 
+	if (path == NULL || owner == NULL)
+		return;
+
 	/*
-	 * Skip NULL and paths with an invalid NodeTag: walk_path already
-	 * reports those, and ->parent on a bogus chunk is not readable.
+	 * Upper rels legitimately hold paths whose ->parent is the input rel:
+	 * apply_scanjoin_target_to_paths() and friends install scan/join paths
+	 * directly into the upper rel's lists.  The identity invariant only
+	 * holds for base and join rels.
 	 */
-	if (path == NULL || !is_path_tag(nodeTag(path)))
+	if (IS_UPPER_REL(owner))
+		return;
+
+	/* A bogus tag means ->parent is not readable; ppc_check_tag reports it. */
+	if (!is_path_tag(nodeTag(path)))
 		return;
 
 	actual = path->parent;
-	if (actual == expected)
+	if (actual == owner)
 		return;
 
 	/*
 	 * ->parent doesn't match.  As the memory is reused it might happen we see
 	 * a sort of garbage here, so validate the pointer before dereferencing it
-	 * via IS_UPPER_REL (which reads ->reloptkind).
+	 * via format_relnames() (which reads ->relids).
 	 */
 	if (actual == NULL || !IsA(actual, RelOptInfo))
 	{
 		ereport(ppc_elevel,
-				errmsg(PPC_NAME ": path has non-RelOptInfo parent in %s, target rel %s",
-					   source, format_relnames(expected, root)),
-				errhint("query: %s",
-						debug_query_string ? debug_query_string : "(null)"));
+				errcode(ERRCODE_DATA_CORRUPTED),
+				errmsg(PPC_NAME ": path has non-RelOptInfo parent in %s, rel %s",
+					   ppc_slot_str(listname, idx),
+					   format_relnames(owner, root)),
+				errdetail_internal("detected at %s; path %s",
+								   ppc_context_str(ctx),
+								   tag_name((int) nodeTag(path))),
+				errcontext("while planning: %s", ppc_query_text()));
 		return;
 	}
-
-	/*
-	 * Upper rels legitimately carry paths whose ->parent is the input rel
-	 * (see apply_scanjoin_target_to_paths and friends).  We filter these out
-	 * here rather than in walk_rel so that a garbage ->parent is still caught
-	 * by the IsA check above.
-	 */
-	if (IS_UPPER_REL(actual))
-		return;
 
 	/*
 	 * Classic same-size-class alias: the slot was reused by another rel's
 	 * path.  Name both rels by their contributing base relations.
 	 */
 	ereport(ppc_elevel,
-			errmsg(PPC_NAME ": path parent mismatch in %s, target rel %s",
-				   source, format_relnames(expected, root)),
-			container != NULL
-			? errdetail("path %s claims rel %s, path signature: rows: %.0lf, scost: %.2lf, tcost: %.2lf; %s contents: %s",
-						tag_name(path->type),
-						actual->relids != NULL ? nodeToString(actual->relids) : "UPPER_REL",
-						path->rows, path->startup_cost, path->total_cost,
-						source, format_pathlist(container))
-			: errdetail("path %s claims rel %s, path signature: rows: %.0lf, scost: %.2lf, tcost: %.2lf",
-						tag_name(path->type),
-						actual->relids != NULL ? nodeToString(actual->relids) : "UPPER_REL",
-						path->rows, path->startup_cost, path->total_cost),
-			errhint("query: %s",
-					debug_query_string ? debug_query_string : "(null)"));
+			errcode(ERRCODE_DATA_CORRUPTED),
+			errmsg(PPC_NAME ": path parent mismatch in %s, rel %s",
+				   ppc_slot_str(listname, idx), format_relnames(owner, root)),
+			container != NIL
+			? errdetail_internal("detected at %s; path %s claims rel %s; rows %.0f, startup_cost %.2f, total_cost %.2f; %s contents: %s",
+								 ppc_context_str(ctx),
+								 tag_name((int) nodeTag(path)),
+								 format_relnames(actual, root),
+								 path->rows, path->startup_cost,
+								 path->total_cost,
+								 listname, format_pathlist(container))
+			: errdetail_internal("detected at %s; path %s claims rel %s; rows %.0f, startup_cost %.2f, total_cost %.2f",
+								 ppc_context_str(ctx),
+								 tag_name((int) nodeTag(path)),
+								 format_relnames(actual, root),
+								 path->rows, path->startup_cost,
+								 path->total_cost),
+			errcontext("while planning: %s", ppc_query_text()));
+}
+
+
+/*
+ * ppc_check_pathlist
+ *		Shallow validation of one list owned by rel: NodeTag then parent
+ *		identity, for every element.  Used by the per-stage hooks, which
+ *		have no visited set and so cannot descend.  The end-of-planning
+ *		walker applies the very same two rules from walk_path().
+ */
+static void
+ppc_check_pathlist(List *paths, const char *listname, RelOptInfo *rel,
+				   PlannerInfo *root, const PpcContext *ctx)
+{
+	ListCell   *lc;
+
+	foreach(lc, paths)
+	{
+		Path	   *path = (Path *) lfirst(lc);
+		int			idx = foreach_current_index(lc);
+
+		if (ppc_check_tag(path, listname, idx, paths, rel, root, ctx))
+			ppc_check_parent(path, rel, listname, idx, paths, root, ctx);
+	}
+}
+
+
+/*
+ * ppc_check_rel_pathlists
+ *		Check both pathlist and partial_pathlist of one rel.
+ */
+static void
+ppc_check_rel_pathlists(RelOptInfo *rel, PlannerInfo *root,
+						const PpcContext *ctx)
+{
+	ppc_check_pathlist(rel->pathlist, "pathlist", rel, root, ctx);
+	ppc_check_pathlist(rel->partial_pathlist, "partial_pathlist", rel, root,
+					   ctx);
 }
 
 
 /*
  * walk_pathlist
  *		Visit each Path in a List, tagging every element with the list's name.
+ *		owner, when non-NULL, is the rel that must own every element.
  */
 static void
-walk_pathlist(List *paths, const char *listname,
+walk_pathlist(List *paths, const char *listname, RelOptInfo *owner,
 			  RelOptInfo *rel, PlannerInfo *root)
 {
 	ListCell   *lc;
 
 	foreach(lc, paths)
-		walk_path((Path *) lfirst(lc), listname, paths, rel, root);
+		walk_path((Path *) lfirst(lc), listname, foreach_current_index(lc),
+				  paths, owner, rel, root);
+}
+
+
+/*
+ * walk_subpath
+ *		Descend into a Path embedded in another Path.  Such a child has no
+ *		index, no containing list to dump, and no ownership claim to check:
+ *		inside a compound Path the parent legitimately varies.
+ */
+static void
+walk_subpath(Path *path, const char *source, RelOptInfo *rel,
+			 PlannerInfo *root)
+{
+	walk_path(path, source, PPC_NO_INDEX, NIL, NULL, rel, root);
 }
 
 
 /*
  * walk_path
- *		Validate a Path's NodeTag and descend into every embedded sub-Path.
+ *		Validate a Path's NodeTag and parent, then descend into every
+ *		embedded sub-Path.
  *
- *		The NodeTag check is the main "is this memory still a Path" probe.
- *		With CLOBBER_FREED_MEMORY the tag becomes 0x7F7F7F7F which fails
- *		is_path_tag; with a real freed-and-reused chunk the odds of landing
- *		on a valid Path tag are vanishingly low.
- *
- *		source names the field or list that contains this Path (for diagnostics).
- *		container, when non-NULL, is the List whose full contents are dumped
- *		in the errdetail when corruption is detected.
+ *		listname names the field or list that contains this Path, and idx
+ *		its position when it came from a list.  container, when non-NIL, is
+ *		the List whose full contents are dumped in the errdetail.  owner is
+ *		the rel required to own this Path, or NULL if none.
  *
  *		Layout safety net: every Path subtype dereferenced below is guarded
  *		by a structural-hash entry in PPC_WALK_PATH_EXPECTED_HASHES further
- *		down in this file.  If you are here because a field name no longer
- *		compiles, *do not* paper over it by renaming the access — read the
- *		mirror block's header comment first: the hash-mismatch diagnostic
- *		will tell you which struct moved and why you are being forced to
- *		look.
+ *		down in this file, and every *abstract* parent reached through a
+ *		cast by one in PPC_ABSTRACT_PATH_EXPECTED_HASHES.  If you are here
+ *		because a field name no longer compiles, *do not* paper over it by
+ *		renaming the access — read the mirror blocks' header comments
+ *		first: the hash-mismatch diagnostic will tell you which struct
+ *		moved and why you are being forced to look.
  */
 static void
-walk_path(Path *path, const char *source, List *container,
-		  RelOptInfo *rel, PlannerInfo *root)
+walk_path(Path *path, const char *listname, int idx, List *container,
+		  RelOptInfo *owner, RelOptInfo *rel, PlannerInfo *root)
 {
 	NodeTag		tag;
 
@@ -670,24 +770,15 @@ walk_path(Path *path, const char *source, List *container,
 
 	check_stack_depth();
 
-	tag = nodeTag(path);
-	if (!is_path_tag(tag))
-	{
-		ereport(ppc_elevel,
-				errmsg(PPC_NAME ": invalid NodeTag %s in %s, rel %s",
-					   tag_name((int) tag), source,
-					   format_relnames(rel, root)),
-				container != NULL
-				? errdetail("%s contents: %s",
-							source, format_pathlist(container))
-				: 0,
-				errhint("query: %s",
-						debug_query_string ? debug_query_string : "(null)"));
+	if (!ppc_check_tag(path, listname, idx, container, rel, root, NULL))
 		return;
-	}
+
+	ppc_check_parent(path, owner, listname, idx, container, root, NULL);
 
 	if (!mark_visited(path))
 		return;
+
+	tag = nodeTag(path);
 
 	/*
 	 * Dive into path tree. It is necessary (most of the time redundant) step
@@ -705,99 +796,99 @@ walk_path(Path *path, const char *source, List *container,
 			break;
 
 		case T_BitmapHeapPath:
-			walk_path(((BitmapHeapPath *) path)->bitmapqual,
-					  "BitmapHeapPath.bitmapqual", NULL, rel, root);
+			walk_subpath(((BitmapHeapPath *) path)->bitmapqual,
+						 "BitmapHeapPath.bitmapqual", rel, root);
 			break;
 		case T_BitmapAndPath:
 			walk_pathlist(((BitmapAndPath *) path)->bitmapquals,
-						  "BitmapAndPath.bitmapquals", rel, root);
+						  "BitmapAndPath.bitmapquals", NULL, rel, root);
 			break;
 		case T_BitmapOrPath:
 			walk_pathlist(((BitmapOrPath *) path)->bitmapquals,
-						  "BitmapOrPath.bitmapquals", rel, root);
+						  "BitmapOrPath.bitmapquals", NULL, rel, root);
 			break;
 
 		case T_SubqueryScanPath:
-			walk_path(((SubqueryScanPath *) path)->subpath,
-					  "SubqueryScanPath.subpath", NULL, rel, root);
+			walk_subpath(((SubqueryScanPath *) path)->subpath,
+						 "SubqueryScanPath.subpath", rel, root);
 			break;
 
 		case T_ForeignPath:
-			walk_path(((ForeignPath *) path)->fdw_outerpath,
-					  "ForeignPath.fdw_outerpath", NULL, rel, root);
+			walk_subpath(((ForeignPath *) path)->fdw_outerpath,
+						 "ForeignPath.fdw_outerpath", rel, root);
 			break;
 
 		case T_CustomPath:
 			walk_pathlist(((CustomPath *) path)->custom_paths,
-						  "CustomPath.custom_paths", rel, root);
+						  "CustomPath.custom_paths", NULL, rel, root);
 			break;
 
 		case T_AppendPath:
 			walk_pathlist(((AppendPath *) path)->subpaths,
-						  "AppendPath.subpaths", rel, root);
+						  "AppendPath.subpaths", NULL, rel, root);
 			break;
 		case T_MergeAppendPath:
 			walk_pathlist(((MergeAppendPath *) path)->subpaths,
-						  "MergeAppendPath.subpaths", rel, root);
+						  "MergeAppendPath.subpaths", NULL, rel, root);
 			break;
 
 		case T_MaterialPath:
-			walk_path(((MaterialPath *) path)->subpath,
-					  "MaterialPath.subpath", NULL, rel, root);
+			walk_subpath(((MaterialPath *) path)->subpath,
+						 "MaterialPath.subpath", rel, root);
 			break;
 		case T_MemoizePath:
-			walk_path(((MemoizePath *) path)->subpath,
-					  "MemoizePath.subpath", NULL, rel, root);
+			walk_subpath(((MemoizePath *) path)->subpath,
+						 "MemoizePath.subpath", rel, root);
 			break;
 		case T_GatherPath:
-			walk_path(((GatherPath *) path)->subpath,
-					  "GatherPath.subpath", NULL, rel, root);
+			walk_subpath(((GatherPath *) path)->subpath,
+						 "GatherPath.subpath", rel, root);
 			break;
 		case T_GatherMergePath:
-			walk_path(((GatherMergePath *) path)->subpath,
-					  "GatherMergePath.subpath", NULL, rel, root);
+			walk_subpath(((GatherMergePath *) path)->subpath,
+						 "GatherMergePath.subpath", rel, root);
 			break;
 
 		case T_NestPath:
 		case T_MergePath:
 		case T_HashPath:
-			walk_path(((JoinPath *) path)->outerjoinpath,
-					  "JoinPath.outerjoinpath", NULL, rel, root);
-			walk_path(((JoinPath *) path)->innerjoinpath,
-					  "JoinPath.innerjoinpath", NULL, rel, root);
+			walk_subpath(((JoinPath *) path)->outerjoinpath,
+						 "JoinPath.outerjoinpath", rel, root);
+			walk_subpath(((JoinPath *) path)->innerjoinpath,
+						 "JoinPath.innerjoinpath", rel, root);
 			break;
 
 		case T_ProjectionPath:
-			walk_path(((ProjectionPath *) path)->subpath,
-					  "ProjectionPath.subpath", NULL, rel, root);
+			walk_subpath(((ProjectionPath *) path)->subpath,
+						 "ProjectionPath.subpath", rel, root);
 			break;
 		case T_ProjectSetPath:
-			walk_path(((ProjectSetPath *) path)->subpath,
-					  "ProjectSetPath.subpath", NULL, rel, root);
+			walk_subpath(((ProjectSetPath *) path)->subpath,
+						 "ProjectSetPath.subpath", rel, root);
 			break;
 		case T_SortPath:
-			walk_path(((SortPath *) path)->subpath,
-					  "SortPath.subpath", NULL, rel, root);
+			walk_subpath(((SortPath *) path)->subpath,
+						 "SortPath.subpath", rel, root);
 			break;
 		case T_IncrementalSortPath:
-			walk_path(((IncrementalSortPath *) path)->spath.subpath,
-					  "IncrementalSortPath.subpath", NULL, rel, root);
+			walk_subpath(((IncrementalSortPath *) path)->spath.subpath,
+						 "IncrementalSortPath.subpath", rel, root);
 			break;
 		case T_GroupPath:
-			walk_path(((GroupPath *) path)->subpath,
-					  "GroupPath.subpath", NULL, rel, root);
+			walk_subpath(((GroupPath *) path)->subpath,
+						 "GroupPath.subpath", rel, root);
 			break;
 		case T_UniquePath:
-			walk_path(((UniquePath *) path)->subpath,
-					  "UniquePath.subpath", NULL, rel, root);
+			walk_subpath(((UniquePath *) path)->subpath,
+						 "UniquePath.subpath", rel, root);
 			break;
 		case T_AggPath:
-			walk_path(((AggPath *) path)->subpath,
-					  "AggPath.subpath", NULL, rel, root);
+			walk_subpath(((AggPath *) path)->subpath,
+						 "AggPath.subpath", rel, root);
 			break;
 		case T_GroupingSetsPath:
-			walk_path(((GroupingSetsPath *) path)->subpath,
-					  "GroupingSetsPath.subpath", NULL, rel, root);
+			walk_subpath(((GroupingSetsPath *) path)->subpath,
+						 "GroupingSetsPath.subpath", rel, root);
 			break;
 		case T_MinMaxAggPath:
 			{
@@ -817,49 +908,86 @@ walk_path(Path *path, const char *source, List *container,
 
 				foreach(lc, mmap->mmaggregates)
 				{
-					MinMaxAggInfo *info = lfirst_node(MinMaxAggInfo, lc);
+					MinMaxAggInfo *info = (MinMaxAggInfo *) lfirst(lc);
 
-					walk_path(info->path, "MinMaxAggInfo.path",
-							  NULL, rel, root);
+					if (info == NULL)
+						continue;
+
+					/*
+					 * Not lfirst_node(): castNode() Asserts on the tag, and
+					 * this list is as liable to have been recycled as
+					 * anything else we inspect.  Report and carry on.
+					 */
+					if (!IsA(info, MinMaxAggInfo))
+					{
+						ereport(ppc_elevel,
+								errcode(ERRCODE_DATA_CORRUPTED),
+								errmsg(PPC_NAME ": invalid NodeTag %s in MinMaxAggPath.mmaggregates, rel %s",
+									   tag_name((int) nodeTag(info)),
+									   format_relnames(rel, root)),
+								errcontext("while planning: %s",
+										   ppc_query_text()));
+						continue;
+					}
+
+					walk_subpath(info->path, "MinMaxAggInfo.path", rel, root);
 					if (info->subroot != NULL)
 						walk_planner_info(info->subroot);
 				}
 			}
 			break;
 		case T_WindowAggPath:
-			walk_path(((WindowAggPath *) path)->subpath,
-					  "WindowAggPath.subpath", NULL, rel, root);
+			walk_subpath(((WindowAggPath *) path)->subpath,
+						 "WindowAggPath.subpath", rel, root);
 			break;
 
 		case T_SetOpPath:
-			walk_path(((SetOpPath *) path)->leftpath,
-					  "SetOpPath.leftpath", NULL, rel, root);
-			walk_path(((SetOpPath *) path)->rightpath,
-					  "SetOpPath.rightpath", NULL, rel, root);
+			walk_subpath(((SetOpPath *) path)->leftpath,
+						 "SetOpPath.leftpath", rel, root);
+			walk_subpath(((SetOpPath *) path)->rightpath,
+						 "SetOpPath.rightpath", rel, root);
 			break;
 		case T_RecursiveUnionPath:
-			walk_path(((RecursiveUnionPath *) path)->leftpath,
-					  "RecursiveUnionPath.leftpath", NULL, rel, root);
-			walk_path(((RecursiveUnionPath *) path)->rightpath,
-					  "RecursiveUnionPath.rightpath", NULL, rel, root);
+			walk_subpath(((RecursiveUnionPath *) path)->leftpath,
+						 "RecursiveUnionPath.leftpath", rel, root);
+			walk_subpath(((RecursiveUnionPath *) path)->rightpath,
+						 "RecursiveUnionPath.rightpath", rel, root);
 			break;
 
 		case T_LockRowsPath:
-			walk_path(((LockRowsPath *) path)->subpath,
-					  "LockRowsPath.subpath", NULL, rel, root);
+			walk_subpath(((LockRowsPath *) path)->subpath,
+						 "LockRowsPath.subpath", rel, root);
 			break;
 		case T_ModifyTablePath:
-			walk_path(((ModifyTablePath *) path)->subpath,
-					  "ModifyTablePath.subpath", NULL, rel, root);
+			walk_subpath(((ModifyTablePath *) path)->subpath,
+						 "ModifyTablePath.subpath", rel, root);
 			break;
 		case T_LimitPath:
-			walk_path(((LimitPath *) path)->subpath,
-					  "LimitPath.subpath", NULL, rel, root);
+			walk_subpath(((LimitPath *) path)->subpath,
+						 "LimitPath.subpath", rel, root);
 			break;
 
 		default:
-			/* is_path_tag accepted it, so this can't happen. */
-			Assert(false);
+
+			/*
+			 * is_path_tag() accepted this tag, so core has grown a Path
+			 * subtype that this switch has not been taught about.  The
+			 * count-parity StaticAssertDecl below fires on such a change,
+			 * but `make bless-path-hashes` can be run without auditing the
+			 * switch, so this arm is reachable in practice.
+			 *
+			 * Report it.  An Assert() here would abort the backend, and the
+			 * cassert build that README recommends is precisely where that
+			 * would turn a stale walker into a dead check-world run.
+			 */
+			ereport(ppc_elevel,
+					errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg(PPC_NAME ": unhandled Path subtype %s in %s, rel %s",
+						   tag_name((int) tag), ppc_slot_str(listname, idx),
+						   format_relnames(rel, root)),
+					errdetail_internal("Sub-paths of this node were not checked."),
+					errhint("Add a case to walk_path() and an entry to PPC_WALK_PATH_EXPECTED_HASHES."),
+					errcontext("while planning: %s", ppc_query_text()));
 			break;
 	}
 }
@@ -872,7 +1000,7 @@ walk_path(Path *path, const char *source, List *container,
  * highest designated-initializer index emitted by the generator, so new
  * upstream tags don't silently overflow.
  */
-static const char * const nodetag_names[] = {
+static const char *const nodetag_names[] = {
 #include "nodetag_names.h"
 };
 
@@ -895,11 +1023,78 @@ tag_name(int tag)
 
 
 /*
+ * ppc_slot_str
+ *		Name the slot a Path was found in: "pathlist[3]" for a list element,
+ *		or just "cheapest_total_path" for a scalar one.
+ */
+static const char *
+ppc_slot_str(const char *listname, int idx)
+{
+	if (idx < 0)
+		return listname;
+
+	return psprintf("%s[%d]", listname, idx);
+}
+
+
+/*
+ * ppc_context_str
+ *		Describe the call site that requested the check.  NULL means the
+ *		end-of-planning walker.  Only reporting paths call this; see the
+ *		PpcContext comment for why.
+ */
+static const char *
+ppc_context_str(const PpcContext *ctx)
+{
+	if (ctx == NULL)
+		return "end of planning";
+
+	Assert(ctx->kind != NULL);
+
+	if (ctx->rel != NULL)
+		return psprintf("%s %s", ctx->kind,
+						format_relnames(ctx->rel, ctx->root));
+	if (ctx->detail != NULL)
+		return psprintf("%s %s", ctx->kind, ctx->detail);
+
+	return ctx->kind;
+}
+
+
+/*
+ * ppc_query_text
+ *		The statement being planned, clipped to something a log file can
+ *		stand.  Generated SQL runs to megabytes, and a finding fires once
+ *		per offending list element.  Clip on a character boundary so the
+ *		log stays valid in the server encoding.
+ */
+static const char *
+ppc_query_text(void)
+{
+	int			len;
+
+	if (debug_query_string == NULL)
+		return "(none)";
+
+	len = (int) strlen(debug_query_string);
+	if (len <= PPC_MAX_QUERY_LEN)
+		return debug_query_string;
+
+	len = pg_mbcliplen(debug_query_string, len, PPC_MAX_QUERY_LEN);
+	return psprintf("%.*s...", len, debug_query_string);
+}
+
+
+/*
  * format_relnames
  *		Build a human-readable string from the owning RelOptInfo's relids,
  *		resolving each member through root->simple_rte_array[i]->eref.
- *		Returns a palloc'd string like "{t1, t2}" or "(unknown)" when
- *		the rel or root is not available.
+ *		Returns a palloc'd string like "{t1, t2}", or one of the fixed
+ *		labels below.
+ *
+ *		"(upper)" means the rel has no base-relation members at all, which
+ *		in core only happens for a query-wide upper rel.  "{}" -- an empty
+ *		but present relids -- is a different thing and prints as such.
  */
 static const char *
 format_relnames(RelOptInfo *rel, PlannerInfo *root)
@@ -908,8 +1103,10 @@ format_relnames(RelOptInfo *rel, PlannerInfo *root)
 	int			x;
 	bool		first = true;
 
-	if (rel == NULL || rel->relids == NULL || root == NULL)
+	if (rel == NULL || root == NULL)
 		return "(unknown)";
+	if (rel->relids == NULL)
+		return "(upper)";
 	if (!IsA(rel->relids, Bitmapset))
 		return "(invalid relids)";
 
@@ -945,8 +1142,12 @@ format_relnames(RelOptInfo *rel, PlannerInfo *root)
 
 /*
  * format_pathlist
- *		Dump the contents of a List of Path pointers: address and NodeTag
+ *		Dump the contents of a List of Path pointers: position and NodeTag
  *		for each element.  Used in errdetail when corruption is detected.
+ *
+ *		Capped at PPC_MAX_LIST_DUMP entries: the caller reports once per
+ *		bad element, so an uncapped dump of a wholly clobbered list is
+ *		quadratic in the list length.
  */
 static const char *
 format_pathlist(List *paths)
@@ -963,6 +1164,13 @@ format_pathlist(List *paths)
 	foreach(lc, paths)
 	{
 		Path	   *p = (Path *) lfirst(lc);
+
+		if (i >= PPC_MAX_LIST_DUMP)
+		{
+			appendStringInfo(&buf, "; ... %d more",
+							 list_length(paths) - i);
+			break;
+		}
 
 		if (i > 0)
 			appendStringInfoString(&buf, "; ");
@@ -995,7 +1203,7 @@ format_pathlist(List *paths)
 static bool
 mark_visited(void *ptr)
 {
-	bool	found;
+	bool		found;
 
 	Assert(visited != NULL);
 	Assert(ptr != NULL);
@@ -1007,9 +1215,9 @@ mark_visited(void *ptr)
 
 /*
  * PPC_WALK_PATH_EXPECTED_HASHES
- *		Single hand-maintained source of truth for the set of Path subtypes
- *		walk_path() knows how to descend into, together with each subtype's
- *		expected structural hash.  Drives two compile-time checks:
+ *		Single hand-maintained source of truth for the set of concrete Path
+ *		subtypes walk_path() knows how to descend into, together with each
+ *		subtype's expected structural hash.  Drives two compile-time checks:
  *
  *		  - The count of entries here must equal the count in PATH_TAG_LIST
  *			(generated from pathnodes.h).  Catches any addition or removal
@@ -1033,7 +1241,9 @@ mark_visited(void *ptr)
  *			 against, audit walk_path()'s case for that subtype, and run
  *			 `make bless-path-hashes` to refresh this list.  (The make
  *			 target is a convenience; the audit of walk_path() is not
- *			 automated and is mandatory.)
+ *			 automated and is mandatory.  bless_path_hashes.pl refuses to
+ *			 introduce a subtype it has never seen here, so case 1 above
+ *			 stays a hand edit.)
  *
  *		All concrete subtypes are listed — even the ones walk_path() treats
  *		as leaves (T_Path, T_IndexPath, T_TidPath, T_TidRangePath,
@@ -1041,17 +1251,13 @@ mark_visited(void *ptr)
  *		layout claim that can rot if core grows a new Path * field in one
  *		of them.
  *
- *		Limitation: each hash covers only its subtype's own body, not the
- *		bodies of embedded parent structs.  walk_path() reaches into
- *		embedded parents at exactly one point -- IncrementalSortPath's
- *		spath.subpath -- and that access is protected by the SortPath
- *		entry below.  If future walker code dereferences a non-Path struct
- *		embedded in a Path (e.g. ((Foo *) path)->non_path.field), layout
- *		changes in that non-Path struct will not trip this guard and must
- *		be handled separately.
+ *		Each hash covers only its subtype's own body, not the bodies of
+ *		embedded parent structs, so a struct that walk_path() reaches
+ *		through a cast to its abstract parent needs its own entry in
+ *		PPC_ABSTRACT_PATH_EXPECTED_HASHES below.
  *
- *		See contrib/pg_pathcheck/README.md section "Bumping PostgreSQL"
- *		for the end-to-end workflow.
+ *		See README.md section "Bumping PostgreSQL" for the end-to-end
+ *		workflow.
  */
 #define PPC_WALK_PATH_EXPECTED_HASHES(X) \
 	X(T_Path,                0x09ee69a9e5a8f23bULL) \
@@ -1091,6 +1297,26 @@ mark_visited(void *ptr)
 	X(T_LimitPath,           0x4fd0995222ca414eULL)
 
 /*
+ * PPC_ABSTRACT_PATH_EXPECTED_HASHES
+ *		Same idea, for the abstract Path subtypes.  These carry no NodeTag
+ *		of their own, so they never appear in PATH_TAG_LIST — but walk_path()
+ *		still reads fields through them, by casting a concrete node to its
+ *		abstract parent:
+ *
+ *			((JoinPath *) path)->outerjoinpath
+ *
+ *		T_NestPath's hash covers the text "JoinPath jpath;", which does not
+ *		change when JoinPath's own body does.  Without an entry here, a
+ *		reorder or rename inside JoinPath would sail past every guard and
+ *		leave walk_path() reading the wrong offset.
+ *
+ *		Add an entry whenever walk_path() starts dereferencing a new
+ *		abstract parent, and keep the count in step with PATH_ABSTRACT_LIST.
+ */
+#define PPC_ABSTRACT_PATH_EXPECTED_HASHES(X) \
+	X(JoinPath, 0x1198455f4125caa6ULL)
+
+/*
  * Count-parity check: the number of subtypes we expect walk_path() to
  * handle must equal the number actually present in PATH_TAG_LIST.  This
  * is what catches additions and removals in core; the per-tag hash
@@ -1106,6 +1332,13 @@ StaticAssertDecl((0 PATH_TAG_LIST(PPC_COUNT_ONE_ARG)) ==
 				 "or remove entries in PPC_WALK_PATH_EXPECTED_HASHES "
 				 "and teach walk_path() about the change.");
 
+StaticAssertDecl((0 PATH_ABSTRACT_LIST(PPC_COUNT_ONE_ARG)) ==
+				 (0 PPC_ABSTRACT_PATH_EXPECTED_HASHES(PPC_COUNT_TWO_ARG)),
+				 "pg_pathcheck: number of abstract Path subtypes in "
+				 "pathnodes.h no longer matches "
+				 "PPC_ABSTRACT_PATH_EXPECTED_HASHES; add or remove entries "
+				 "and check whether walk_path() dereferences the new one.");
+
 #undef PPC_COUNT_ONE_ARG
 #undef PPC_COUNT_TWO_ARG
 
@@ -1114,15 +1347,19 @@ StaticAssertDecl((0 PATH_TAG_LIST(PPC_COUNT_ONE_ARG)) ==
  * compares the blessed hash against the one gen_pathtags.pl just computed.
  * Token-paste PPC_PATH_HASH_ onto the tag to reference the generated
  * constant; stringify the tag so the diagnostic names the exact struct.
+ * The paste works for both lists, since the generator publishes concrete
+ * subtypes as PPC_PATH_HASH_T_<name> and abstract ones as
+ * PPC_PATH_HASH_<name>.
  */
 #define PPC_HASH_ASSERT(tag, expected)										\
 	StaticAssertDecl((expected) == PPC_PATH_HASH_##tag,						\
 					 "pg_pathcheck: struct layout for " #tag " changed in "	\
 					 "pathnodes.h; audit walk_path() and run "				\
 					 "`make bless-path-hashes` to refresh "					\
-					 "PPC_WALK_PATH_EXPECTED_HASHES.");
+					 "the expected-hash lists.");
 
 PPC_WALK_PATH_EXPECTED_HASHES(PPC_HASH_ASSERT)
+PPC_ABSTRACT_PATH_EXPECTED_HASHES(PPC_HASH_ASSERT)
 
 #undef PPC_HASH_ASSERT
 
