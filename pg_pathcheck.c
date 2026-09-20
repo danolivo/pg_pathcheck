@@ -1042,13 +1042,14 @@ mark_visited(void *ptr)
  *		of them.
  *
  *		Limitation: each hash covers only its subtype's own body, not the
- *		bodies of embedded parent structs.  walk_path() reaches into
- *		embedded parents at exactly one point -- IncrementalSortPath's
- *		spath.subpath -- and that access is protected by the SortPath
- *		entry below.  If future walker code dereferences a non-Path struct
- *		embedded in a Path (e.g. ((Foo *) path)->non_path.field), layout
- *		changes in that non-Path struct will not trip this guard and must
- *		be handled separately.
+ *		bodies of embedded parent structs.  walk_path() reaches into an
+ *		embedded parent at two points: IncrementalSortPath's spath.subpath,
+ *		protected by the SortPath entry below, and the JoinPath cast used
+ *		by the NestPath/MergePath/HashPath cases, protected by
+ *		PPC_ABSTRACT_PATH_EXPECTED_HASHES further down.  If future walker
+ *		code dereferences a non-Path struct embedded in a Path (e.g.
+ *		((Foo *) path)->non_path.field), layout changes in that non-Path
+ *		struct will not trip this guard and must be handled separately.
  *
  *		See contrib/pg_pathcheck/README.md section "Bumping PostgreSQL"
  *		for the end-to-end workflow.
@@ -1077,7 +1078,7 @@ mark_visited(void *ptr)
 	X(T_ProjectionPath,      0xe9172dd4d292d671ULL) \
 	X(T_ProjectSetPath,      0x90f989f41b57b041ULL) \
 	X(T_SortPath,            0x90f989f41b57b041ULL) \
-	X(T_IncrementalSortPath, 0x4c69aafa5f126723ULL) \
+	X(T_IncrementalSortPath, 0xfd300ddc96933ad2ULL) \
 	X(T_GroupPath,           0xd3ffe008ac1ac2fcULL) \
 	X(T_UniquePath,          0x5654a3410d707ef9ULL) \
 	X(T_AggPath,             0x179cb625db854a97ULL) \
@@ -1087,14 +1088,39 @@ mark_visited(void *ptr)
 	X(T_SetOpPath,           0xd849dc901753a051ULL) \
 	X(T_RecursiveUnionPath,  0x46f3b9fc9f2321f6ULL) \
 	X(T_LockRowsPath,        0x094815119f154b2dULL) \
-	X(T_ModifyTablePath,     0x1ea4932e8ac9b889ULL) \
+	X(T_ModifyTablePath,     0xdd89c0960ce27210ULL) \
 	X(T_LimitPath,           0x4fd0995222ca414eULL)
+
+/*
+ * PPC_ABSTRACT_PATH_EXPECTED_HASHES
+ *		The same contract, for the abstract Path subtypes -- the ones that
+ *		carry no NodeTag of their own and exist only as an embedded parent
+ *		inside their concrete descendants.
+ *
+ *		walk_path() reaches inherited fields by casting the concrete node
+ *		to its abstract parent: ((JoinPath *) path)->outerjoinpath and
+ *		->innerjoinpath, reached from the T_NestPath / T_MergePath /
+ *		T_HashPath cases.  The concrete hashes cannot protect that access:
+ *		NestPath's body is the single line "JoinPath jpath;", whose text
+ *		does not change when JoinPath's own body does.  A reorder or rename
+ *		inside JoinPath would sail past every concrete hash and leave the
+ *		walker reading the wrong offset.  Hence a separate blessed set,
+ *		checked against PPC_PATH_HASH_<Subtype> (no T_ prefix, because
+ *		there is no such NodeTag) from PATH_ABSTRACT_LIST.
+ *
+ *		The break-glass workflow is identical to the concrete block's:
+ *		audit every walk_path() access that goes through the named parent,
+ *		then `make bless-path-hashes`.
+ */
+#define PPC_ABSTRACT_PATH_EXPECTED_HASHES(X) \
+	X(JoinPath, 0x1198455f4125caa6ULL)
 
 /*
  * Count-parity check: the number of subtypes we expect walk_path() to
  * handle must equal the number actually present in PATH_TAG_LIST.  This
  * is what catches additions and removals in core; the per-tag hash
- * asserts below catch layout changes on existing subtypes.
+ * asserts below catch layout changes on existing subtypes.  The abstract
+ * set gets the same treatment against PATH_ABSTRACT_LIST.
  */
 #define PPC_COUNT_ONE_ARG(t)			+ 1
 #define PPC_COUNT_TWO_ARG(t, expected)	+ 1
@@ -1105,6 +1131,14 @@ StaticAssertDecl((0 PATH_TAG_LIST(PPC_COUNT_ONE_ARG)) ==
 				 "no longer matches the set handled by walk_path(); add "
 				 "or remove entries in PPC_WALK_PATH_EXPECTED_HASHES "
 				 "and teach walk_path() about the change.");
+
+StaticAssertDecl((0 PATH_ABSTRACT_LIST(PPC_COUNT_ONE_ARG)) ==
+				 (0 PPC_ABSTRACT_PATH_EXPECTED_HASHES(PPC_COUNT_TWO_ARG)),
+				 "pg_pathcheck: number of abstract Path subtypes in "
+				 "pathnodes.h no longer matches the set blessed here; add "
+				 "or remove entries in PPC_ABSTRACT_PATH_EXPECTED_HASHES "
+				 "and audit every walk_path() access that casts through an "
+				 "abstract parent.");
 
 #undef PPC_COUNT_ONE_ARG
 #undef PPC_COUNT_TWO_ARG
@@ -1123,6 +1157,7 @@ StaticAssertDecl((0 PATH_TAG_LIST(PPC_COUNT_ONE_ARG)) ==
 					 "PPC_WALK_PATH_EXPECTED_HASHES.");
 
 PPC_WALK_PATH_EXPECTED_HASHES(PPC_HASH_ASSERT)
+PPC_ABSTRACT_PATH_EXPECTED_HASHES(PPC_HASH_ASSERT)
 
 #undef PPC_HASH_ASSERT
 

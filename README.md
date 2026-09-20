@@ -168,7 +168,7 @@ The walker depends on the layout of every `Path` subtype in
 that header has moved, the build catches the drift before it turns into a
 runtime `Assert(false)` in `walk_path()`.
 
-There are two compile-time guards in `pg_pathcheck.c`:
+There are three compile-time guards in `pg_pathcheck.c`:
 
 - **Subtype-set guard.** `PPC_WALK_PATH_EXPECTED_HASHES` must list exactly
   the same set of concrete Path subtypes as `PATH_TAG_LIST` (generated from
@@ -181,6 +181,14 @@ There are two compile-time guards in `pg_pathcheck.c`:
   If core edits any walked struct, a `static_assert` fires naming the
   specific subtype.
 
+- **Abstract-parent guard.** `walk_path()` reaches inherited fields by
+  casting a concrete node to its abstract parent — `((JoinPath *)
+  path)->outerjoinpath`. `NestPath`'s own hash covers only the text
+  `JoinPath jpath;` and so never changes when `JoinPath` does, which is why
+  the abstract subtypes carry their own set:
+  `PPC_ABSTRACT_PATH_EXPECTED_HASHES`, checked in count and in hash against
+  `PATH_ABSTRACT_LIST` (generated from `pathnodes.h`).
+
 ### Re-bless workflow
 
 1. Rebuild. The failing assertion tells you whether the subtype *set* or a
@@ -190,8 +198,9 @@ There are two compile-time guards in `pg_pathcheck.c`:
    field accesses in its `case` still reach the same sub-paths. Add cases
    for new subtypes; remove cases for deleted ones. Teach `walk_path()`
    about any new `Path *` or path-list fields.
-4. Run `make bless-path-hashes`. This rewrites the
-   `PPC_WALK_PATH_EXPECTED_HASHES` block in `pg_pathcheck.c` with the
+4. Run `make bless-path-hashes`. This rewrites both the
+   `PPC_WALK_PATH_EXPECTED_HASHES` and the
+   `PPC_ABSTRACT_PATH_EXPECTED_HASHES` block in `pg_pathcheck.c` with the
    current hashes. **Do not run this without doing step 3 first** — it
    defeats the entire guard.
 5. Rebuild. The build should be green again.
